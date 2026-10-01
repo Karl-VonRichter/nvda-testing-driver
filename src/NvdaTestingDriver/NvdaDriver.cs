@@ -318,7 +318,7 @@ namespace NvdaTestingDriver
 		/// <returns>Te text spoken by NVDA after sending the key sequence</returns>
 		public async Task<string> SendKeySequenceAndGetSpokenText(params Key[] keys)
 		{
-			await StopReadingAsync();
+			await TryStopReadingAsync();
 			return await GetNextSpokenMessageAsync(async () =>
 			{
 				await SendKeySequenceAsync(keys);
@@ -443,19 +443,40 @@ namespace NvdaTestingDriver
 			}
 
 			this.OnSpeakCancelled += ONLocalSpeakCancelled;
-			var operationStart = DateTime.Now;
-			while (!cancelReceived && (DateTime.Now - operationStart) < timeout)
+			try
 			{
-				await SendKeysAsync(Key.Control);
-				await Task.Delay(100);
+				var operationStart = DateTime.Now;
+				while (!cancelReceived && (DateTime.Now - operationStart) < timeout)
+				{
+					await SendKeysAsync(Key.Control);
+					await Task.Delay(100);
+				}
+			}
+			finally
+			{
+				this.OnSpeakCancelled -= ONLocalSpeakCancelled;
 			}
 
-			if ((DateTime.Now - operationStart) > timeout)
+			if (!cancelReceived)
 			{
 				throw new Exceptions.TimeoutException("Timeout while waiting for stopping speech.");
 			}
+		}
 
-			this.OnSpeakCancelled -= ONLocalSpeakCancelled;
+		/// <summary>
+		/// Stops speech before a command whose speech is wanted. NVDA does not always confirm a cancel when nothing is being read,
+		/// so a missing confirmation is not an error here.
+		/// </summary>
+		private async Task TryStopReadingAsync()
+		{
+			try
+			{
+				await StopReadingAsync();
+			}
+			catch (Exceptions.TimeoutException)
+			{
+				// Nothing was being read.
+			}
 		}
 
 		/// <summary>
@@ -888,7 +909,7 @@ namespace NvdaTestingDriver
 		/// <returns>The task that will contain the spoken message</returns>
 		private async Task<string> SendKeyCombinationSetAndGetSpokenTextInternal(List<KeyCombination> combinationSet)
 		{
-			await StopReadingAsync();
+			await TryStopReadingAsync();
 			return await GetNextSpokenMessageAsync(async () =>
 			{
 				foreach (var combination in combinationSet.Where(c => c.Any()))
@@ -905,7 +926,7 @@ namespace NvdaTestingDriver
 		/// <returns>The text spoken by NVDA after sending the key combinations</returns>
 		private async Task<string> SendKeyCombinationsAndGetSpokenTextInternalAsync(KeyCombination[] combinations)
 		{
-			await StopReadingAsync();
+			await TryStopReadingAsync();
 			return await GetNextSpokenMessageAsync(async () =>
 			{
 				await SendKeyCombinationsAsync(combinations);
@@ -966,7 +987,7 @@ namespace NvdaTestingDriver
 		/// <returns>The text spoken by NVDA after sending keys</returns>
 		private async Task<string> SendKeysAndGetSpokenTextInternalAsync(Key[] keys)
 		{
-			await StopReadingAsync();
+			await TryStopReadingAsync();
 			return await GetNextSpokenMessageAsync(async () =>
 			{
 				await SendKeysAsync(keys);

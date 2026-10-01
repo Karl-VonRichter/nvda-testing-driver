@@ -2184,6 +2184,12 @@
             </returns>
             <exception cref="T:System.TimeoutException">Timeout while waiting for stopping speech.</exception>
         </member>
+        <member name="M:NvdaTestingDriver.NvdaDriver.TryStopReadingAsync">
+            <summary>
+            Stops speech before a command whose speech is wanted. NVDA does not always confirm a cancel when nothing is being read,
+            so a missing confirmation is not an error here.
+            </summary>
+        </member>
         <member name="M:NvdaTestingDriver.NvdaDriver.Dispose">
             <summary>
             Performs application-defined tasks associated with freeing, releasing, or resetting unmanaged resources.
