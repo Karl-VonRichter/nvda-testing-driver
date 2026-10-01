@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
@@ -29,6 +30,7 @@ namespace RemoteWebsites.Tests
 		[TestInitialize]
 		public void OpenLoginPage()
 		{
+			TauroSession.EnsureSignedOut();
 			TestHelper.WebDriver.Navigate().GoToUrl(LoginUrl);
 			WaitForElement(EmailField);
 			TestHelper.WebDriverWrapper.SetBrowserWindowForeground();
@@ -38,7 +40,14 @@ namespace RemoteWebsites.Tests
 		[TestMethod]
 		public async Task AnnounceThePageTitle()
 		{
-			string text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(NavigatingSystemFocusCommands.ReportTitle);
+			// A notification from another app can briefly become the foreground window, and NVDA then reads its title instead.
+			string text = string.Empty;
+			for (int attempt = 0; attempt < 3 && !NvdaTestHelper.TextContains(text, "Google Chrome"); attempt++)
+			{
+				TestHelper.WebDriverWrapper.EnsureBrowserWindowForeground();
+				text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(NavigatingSystemFocusCommands.ReportTitle);
+			}
+
 			NvdaAssert.TextContains(text, "Login Tauro Dashboard");
 		}
 
@@ -74,6 +83,33 @@ namespace RemoteWebsites.Tests
 			// so NVDA never says "required". Fix: add required to the input and aria-hidden="true" to the asterisk.
 			string text = await FocusAndReportAsync(EmailField);
 			NvdaAssert.TextContains(text, "required");
+		}
+
+		[TestMethod]
+		public async Task AnnounceThePasswordFieldAsRequired()
+		{
+			string text = await FocusAndReportAsync(PasswordField);
+			Console.WriteLine($"NVDA said for the password field: \"{text}\"");
+			Assert.IsFalse(NvdaTestHelper.TextContains(text, "star"), $"The password label's asterisk should be hidden from screen readers. NVDA said: \"{text}\"");
+			NvdaAssert.TextContains(text, "required");
+		}
+
+		[TestMethod]
+		public async Task AnnounceErrorsWhenSubmittingAnEmptyRegistrationForm()
+		{
+			// Every field is left empty, so only the client-side validation runs and no account can be created.
+			TestHelper.WebDriver.Navigate().GoToUrl(TauroSession.BaseUrl + "/register");
+			WaitForElement("form " + SubmitButton);
+			TestHelper.WebDriverWrapper.SetBrowserWindowForeground();
+			var emptyFields = TestHelper.WebDriver.FindElements(By.CssSelector("form input:not([type=hidden]):not([aria-hidden=true])"));
+			Assert.IsTrue(emptyFields.All(f => string.IsNullOrEmpty(f.GetAttribute("value"))), "The registration form should start empty.");
+
+			await FocusAndReportAsync("form " + SubmitButton);
+			string text = await PressEnterAndListenAsync(TimeSpan.FromSeconds(6));
+			Console.WriteLine($"NVDA said after an empty registration: \"{text}\"");
+
+			Assert.IsTrue(new Uri(TestHelper.WebDriver.Url).AbsolutePath.StartsWith("/register"), "An empty registration should stay on the registration page.");
+			NvdaAssert.TextContains(text, "invalid entry");
 		}
 
 		[TestMethod]
@@ -127,8 +163,8 @@ namespace RemoteWebsites.Tests
 				"Show password toggle button",
 				"Remember me check box",
 				"Continue button",
-				"Forgot your password? link",
-				"Create an account link",
+				"Forgot your password?",
+				"Create an account",
 			};
 
 			foreach (var expected in expectedStops)

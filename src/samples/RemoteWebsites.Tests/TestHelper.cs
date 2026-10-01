@@ -33,6 +33,9 @@ namespace RemoteWebsites.Tests
 			// Initialize the Selenium WebDriveer
 			UpWebDriver();
 
+			// Sign in to the Tauro dashboard before NVDA starts, so a manual sign-in doesn't fight with NVDA's keystrokes.
+			TauroSession.SignIn();
+
 			// Starts the NVDATestingDriver
 			await ConnectNvdaDriverAsync();
 		}
