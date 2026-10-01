@@ -50,6 +50,10 @@ The first thing we have to do is instantiate the `NvdaTestingDriver` class. We c
 
 ```
 
+### Which NVDA is used
+
+If NVDA 2025.1 or later is installed, the driver uses it, with its built-in Remote Access and a temporary configuration directory (`%TEMP%\NvdaTestingDriver\userConfig`), so your own NVDA settings are not touched. Any running NVDA is closed first. Set `opt.NvdaExecutablePath` to use a specific NVDA 2025.1+ executable, or `opt.UseInstalledNvda = false` to use the bundled portable NVDA 2018.4.1 instead.
+
 ### Start NVDA
 
 The next step is to connect the driver, i.e. start NVDA and connect to it to control it.

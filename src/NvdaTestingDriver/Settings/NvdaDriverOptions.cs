@@ -185,5 +185,24 @@ namespace NvdaTestingDriver.Settings
 		/// The browse mode settings.
 		/// </value>
 		public BrowseModesSettings BrowseModeSettings { get; set; }
+
+		/// <summary>
+		/// Gets or sets a value indicating whether the NVDA installed on this machine should be used.
+		/// When true (default) and NVDA 2025.1 or later is installed, it is started with a temporary configuration
+		/// directory and its built-in Remote Access. Otherwise the bundled portable NVDA is used.
+		/// </summary>
+		/// <value>
+		///   <c>true</c> to use the installed NVDA; otherwise, <c>false</c>.
+		/// </value>
+		public bool UseInstalledNvda { get; set; } = true;
+
+		/// <summary>
+		/// Gets or sets an explicit path to an NVDA 2025.1+ executable (installed or portable).
+		/// Takes precedence over <see cref="UseInstalledNvda"/>.
+		/// </summary>
+		/// <value>
+		/// The NVDA executable path.
+		/// </value>
+		public string NvdaExecutablePath { get; set; }
 	}
 }

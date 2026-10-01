@@ -132,7 +132,18 @@ namespace NvdaTestingDriver.Settings
 	reportBlockQuotes = {_nvdaDriverOptions.DocumentFormattingSettings.ReportBlockQuotes.ToFirstCapitalizedString()}
 	reportLandmarks = {_nvdaDriverOptions.DocumentFormattingSettings.ReportLandmarks.ToFirstCapitalizedString()}
 	reportFrames = {_nvdaDriverOptions.DocumentFormattingSettings.ReportFrames.ToFirstCapitalizedString()}
-	reportClickable = {_nvdaDriverOptions.DocumentFormattingSettings.ReportClickable.ToFirstCapitalizedString()}";
+	reportClickable = {_nvdaDriverOptions.DocumentFormattingSettings.ReportClickable.ToFirstCapitalizedString()}
+[remote]
+	enabled = True
+	[[controlServer]]
+		autoconnect = True
+		selfHosted = True
+		connectionMode = 0
+		host = {NvdaDriver.LocalHost}
+		port = {NvdaDriver.NvdaRemotePort}
+		key = {NvdaDriver.NvdaRemoteKey}
+	[[ui]]
+		confirmDisconnectAsFollower = False";
 			File.WriteAllText(iniFilePath, iniFileContent, Encoding.ASCII);
 		}
 

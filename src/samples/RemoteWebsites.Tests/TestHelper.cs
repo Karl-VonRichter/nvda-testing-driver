@@ -5,6 +5,8 @@ using NvdaTestingDriver;
 using NvdaTestingDriver.Selenium;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
+using OpenQA.Selenium.Chromium;
+using OpenQA.Selenium.Edge;
 
 namespace RemoteWebsites.Tests
 {
@@ -44,11 +46,31 @@ namespace RemoteWebsites.Tests
 				// to manage the chrome window, and get to put it in the foreground when necessary.
 				WebDriver = WebDriverWrapper.UpWebDriver(() =>
 				{
-					var op = new ChromeOptions
+					// The browser is chosen with the NVDA_TEST_BROWSER environment variable:
+					//   chrome (default) - the installed Google Chrome
+					//   edge             - the installed Microsoft Edge (Chromium)
+					//   chromium         - Chrome for Testing, downloaded by Selenium Manager,
+					//                      or the Chromium binary in NVDA_TEST_BROWSER_BINARY if set
+					string browser = (Environment.GetEnvironmentVariable("NVDA_TEST_BROWSER") ?? "chrome").ToLowerInvariant();
+					string binary = Environment.GetEnvironmentVariable("NVDA_TEST_BROWSER_BINARY");
+					ChromiumOptions op = browser == "edge" ? new EdgeOptions() : new ChromeOptions();
+					op.AcceptInsecureCertificates = false;
+
+					// Build the accessibility tree up front, even if Chromium starts before NVDA.
+					op.AddArgument("--force-renderer-accessibility");
+					if (browser == "chromium")
 					{
-						AcceptInsecureCertificates = false
-					};
-					var webDriver = new ChromeDriver(op);
+						if (string.IsNullOrWhiteSpace(binary))
+						{
+							op.BrowserVersion = "stable";
+						}
+						else
+						{
+							op.BinaryLocation = binary;
+						}
+					}
+
+					IWebDriver webDriver = op is EdgeOptions edgeOptions ? new EdgeDriver(edgeOptions) : new ChromeDriver((ChromeOptions)op);
 					webDriver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromMinutes(3);
 					webDriver.Manage().Window.Maximize();
 					return webDriver;
@@ -56,7 +78,7 @@ namespace RemoteWebsites.Tests
 			}
 			catch (Exception ex)
 			{
-				Console.WriteLine($"Error while starting Chrome WebDriver: {ex.Message}");
+				Console.WriteLine($"Error while starting WebDriver: {ex.Message}");
 				throw;
 			}
 		}

@@ -2034,6 +2034,11 @@
             </summary>
             <seealso cref="T:System.IDisposable" />
         </member>
+        <member name="F:NvdaTestingDriver.NvdaDriver.MinimumInstalledNvdaYear">
+            <summary>
+            First NVDA version with Remote Access built in (it replaced the NVDA Remote add-on used by the bundled copy).
+            </summary>
+        </member>
         <member name="M:NvdaTestingDriver.NvdaDriver.#ctor(NvdaTestingDriver.Settings.NvdaDriverOptions)">
             <summary>
             Initializes a new instance of the <see cref="T:NvdaTestingDriver.NvdaDriver"/> class.
@@ -2192,12 +2197,16 @@
             </summary>
             <exception cref="T:System.NotSupportedException">This library is only compatible with Windows OS, because the screen reader used for testing is only compatible with it.</exception>
         </member>
-        <member name="M:NvdaTestingDriver.NvdaDriver.GetNvdaExecutableFilePath">
+        <member name="M:NvdaTestingDriver.NvdaDriver.GetInstalledNvdaExecutableFilePath">
             <summary>
             Gets the nvda executable file path from windows registry. If registry value does not exists,
             it will extract the nvda.zip file into a temporary folder..
             </summary>
             <returns>The NVDA executable file path</returns>
+            <summary>
+            Gets the path of a usable NVDA 2025.1+ executable: the explicit one in the options, or the one installed on this machine.
+            </summary>
+            <returns>The executable path, or null if the bundled portable NVDA must be used instead.</returns>
         </member>
         <member name="M:NvdaTestingDriver.NvdaDriver.CheckNvdaIntegrity(System.String)">
             <summary>
@@ -2884,6 +2893,25 @@
             </summary>
             <value>
             The browse mode settings.
+            </value>
+        </member>
+        <member name="P:NvdaTestingDriver.Settings.NvdaDriverOptions.UseInstalledNvda">
+            <summary>
+            Gets or sets a value indicating whether the NVDA installed on this machine should be used.
+            When true (default) and NVDA 2025.1 or later is installed, it is started with a temporary configuration
+            directory and its built-in Remote Access. Otherwise the bundled portable NVDA is used.
+            </summary>
+            <value>
+              <c>true</c> to use the installed NVDA; otherwise, <c>false</c>.
+            </value>
+        </member>
+        <member name="P:NvdaTestingDriver.Settings.NvdaDriverOptions.NvdaExecutablePath">
+            <summary>
+            Gets or sets an explicit path to an NVDA 2025.1+ executable (installed or portable).
+            Takes precedence over <see cref="P:NvdaTestingDriver.Settings.NvdaDriverOptions.UseInstalledNvda"/>.
+            </summary>
+            <value>
+            The NVDA executable path.
             </value>
         </member>
         <member name="T:NvdaTestingDriver.Settings.NvdaDriverOptionsWriter">

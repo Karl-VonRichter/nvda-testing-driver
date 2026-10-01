@@ -45,7 +45,7 @@ namespace NvdaTestingDriver.Selenium
 			WebDriver = webDriverFunc();
 			string processName = GetProcesName(WebDriver);
 			var browserProcesses = Process.GetProcessesByName(processName).Where(p => p.StartTime > processStartTime && !string.IsNullOrWhiteSpace(p.MainWindowTitle)).OrderBy(p => p.StartTime).ToList();
-			var process = browserProcesses.First();
+			var process = browserProcesses.FirstOrDefault();
 			if (process != null)
 			{
 				_browserWindowHandle = process.MainWindowHandle;
@@ -92,7 +92,7 @@ namespace NvdaTestingDriver.Selenium
 			}
 			else if (webDriver is EdgeDriver)
 			{
-				processName = "edge";
+				processName = "msedge";
 			}
 			else
 			{
