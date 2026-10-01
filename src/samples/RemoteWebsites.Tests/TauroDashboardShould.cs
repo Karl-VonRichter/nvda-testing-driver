@@ -24,6 +24,8 @@ namespace RemoteWebsites.Tests
 
 		private const string OrgSwitcher = "button[aria-label^='Switch organisation']";
 
+		private static int _escapesForNvdaModeSwitch;
+
 		// Tier 1
 
 		[TestMethod]
@@ -128,7 +130,10 @@ namespace RemoteWebsites.Tests
 			await OpenCommandPaletteAsync();
 			int presses = await PressEscapeUntilDialogClosesAsync(3);
 			Log("Escape presses to close the command palette", presses > 0 ? presses.ToString() : "did not close after 3");
-			Assert.AreEqual(1, presses, "The command palette should close with one Escape press (0 means it did not close).");
+
+			// In focus mode NVDA keeps the first Escape for itself (it says "Browse mode") and only the next one reaches the page,
+			// so two presses is normal there. Anything more means the page itself needs extra presses.
+			Assert.IsTrue(presses > 0 && presses <= _escapesForNvdaModeSwitch + 1, $"The command palette took {presses} Escape presses ({_escapesForNvdaModeSwitch} used by NVDA to leave focus mode; 0 means it did not close).");
 		}
 
 		[TestMethod]
@@ -202,6 +207,7 @@ namespace RemoteWebsites.Tests
 		{
 			await OpenAsync(path);
 			var headings = await QuickNavigateFromTopAsync(Key.D1, 4);
+			Assert.IsTrue(headings.Count > 0, "NVDA found no level 1 heading at all.");
 			int levelOne = headings.Count(h => NvdaTestHelper.TextContains(h, "heading level 1"));
 			Assert.AreEqual(1, levelOne, $"Level 1 headings NVDA found: {string.Join(" / ", headings)}");
 		}
@@ -214,6 +220,7 @@ namespace RemoteWebsites.Tests
 		{
 			await OpenAsync(path);
 			var landmarks = await QuickNavigateFromTopAsync(Key.D, 12);
+			Assert.IsTrue(landmarks.Count > 0, "NVDA found no landmarks at all.");
 			var unnamed = landmarks.Where(l => l.Replace("\r", " ").Replace("\n", " ").Trim().StartsWith("navigation landmark", StringComparison.OrdinalIgnoreCase)).ToList();
 			Assert.AreEqual(0, unnamed.Count, $"Landmarks NVDA found: {string.Join(" / ", landmarks)}");
 		}
@@ -312,7 +319,8 @@ namespace RemoteWebsites.Tests
 			Thread.Sleep(2500);
 			TestHelper.WebDriverWrapper.SetBrowserWindowForeground();
 			TestHelper.WebDriver.FocusOnWindow();
-			await TestHelper.NvdaDriver.StopReadingAsync();
+			await TestHelper.FocusPageContentAsync();
+			await ListenAsync(() => Task.CompletedTask, TimeSpan.FromMilliseconds(500));
 		}
 
 		private static async Task OpenCommandPaletteAsync()
@@ -389,11 +397,17 @@ namespace RemoteWebsites.Tests
 
 		private static async Task<int> PressEscapeUntilDialogClosesAsync(int maxPresses)
 		{
+			_escapesForNvdaModeSwitch = 0;
 			for (int i = 1; i <= maxPresses; i++)
 			{
 				string text = await ListenAsync(() => TestHelper.NvdaDriver.SendKeysAsync(Key.Escape), TimeSpan.FromSeconds(2));
 				bool open = WaitUntil(() => !IsDialogOpen(), TimeSpan.FromSeconds(1)) == false;
 				Log($"Escape {i} (dialog {(open ? "still open" : "closed")})", text);
+				if (open && NvdaTestHelper.TextContains(text, "Browse mode"))
+				{
+					_escapesForNvdaModeSwitch++;
+				}
+
 				if (!open)
 				{
 					return i;

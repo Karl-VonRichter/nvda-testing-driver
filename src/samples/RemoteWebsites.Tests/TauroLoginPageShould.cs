@@ -28,13 +28,14 @@ namespace RemoteWebsites.Tests
 		private const string SubmitButton = "button[type=submit]";
 
 		[TestInitialize]
-		public void OpenLoginPage()
+		public async Task OpenLoginPage()
 		{
 			TauroSession.EnsureSignedOut();
 			TestHelper.WebDriver.Navigate().GoToUrl(LoginUrl);
 			WaitForElement(EmailField);
 			TestHelper.WebDriverWrapper.SetBrowserWindowForeground();
 			TestHelper.WebDriver.FocusOnWindow();
+			await TestHelper.FocusPageContentAsync();
 		}
 
 		[TestMethod]

@@ -40,6 +40,28 @@ namespace RemoteWebsites.Tests
 			await ConnectNvdaDriverAsync();
 		}
 
+		/// <summary>
+		/// Gives keyboard focus back to the web page if it is in the browser's own UI (address bar, toolbar),
+		/// where Tab can take it from the last element on a page. Script focus() can't take it back from there.
+		/// </summary>
+		/// <returns>The task associated to this operation</returns>
+		internal static async Task FocusPageContentAsync()
+		{
+			for (int attempt = 0; attempt < 6 && !PageHasFocus(); attempt++)
+			{
+				// F6 moves focus between Chrome's address bar, toolbars and the page.
+				await NvdaDriver.SendKeysAsync(Key.F6);
+				await Task.Delay(400);
+			}
+
+			if (!PageHasFocus())
+			{
+				throw new InvalidOperationException("Could not move keyboard focus back into the web page.");
+			}
+		}
+
+		private static bool PageHasFocus() => (bool)((IJavaScriptExecutor)WebDriver).ExecuteScript("return document.hasFocus();");
+
 		private static void UpWebDriver()
 		{
 			try
