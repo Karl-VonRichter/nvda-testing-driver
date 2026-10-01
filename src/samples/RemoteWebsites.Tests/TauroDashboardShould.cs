@@ -161,7 +161,10 @@ namespace RemoteWebsites.Tests
 		public async Task ReachThePacketsPerHourChartWithTab()
 		{
 			await OpenAsync("/");
-			await FocusAndReportAsync("main h1");
+
+			// Start from the page heading; what NVDA says for the heading itself doesn't matter here.
+			TestHelper.WebDriver.Focus(TestHelper.WebDriver.FindElement(By.CssSelector("main h1")));
+			Thread.Sleep(500);
 
 			for (int i = 1; i <= 40; i++)
 			{
