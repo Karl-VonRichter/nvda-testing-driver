@@ -48,7 +48,7 @@ namespace RemoteWebsites.Tests
 					{
 						AcceptInsecureCertificates = false
 					};
-					var webDriver = new ChromeDriver(Environment.CurrentDirectory, op);
+					var webDriver = new ChromeDriver(op);
 					webDriver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromMinutes(3);
 					webDriver.Manage().Window.Maximize();
 					return webDriver;

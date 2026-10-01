@@ -42,8 +42,8 @@
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="MSTest.TestFramework" Version="1.1.11" />
-		<PackageReference Include="NvdaTestingDriver" Version="0.2.0-beta" />
+		<PackageReference Include="MSTest.TestFramework" Version="3.10.4" />
+		<ProjectReference Include="../NvdaTestingDriver/NvdaTestingDriver.csproj" />
 		<PackageReference Include="StyleCop.Analyzers" Version="1.1.1-rc.94">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
