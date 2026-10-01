@@ -2071,6 +2071,15 @@
             Occurs when the current speak has been cancelled.
             </summary>
         </member>
+        <member name="P:NvdaTestingDriver.NvdaDriver.BeforeSendingKeys">
+            <summary>
+            Gets or sets an action run before any keys are sent to NVDA. Keys sent through NVDA are real keystrokes that reach
+            the foreground window, so use this to check the application under test is in the foreground (throw to stop the send).
+            </summary>
+            <value>
+            The action to run before sending keys.
+            </value>
+        </member>
         <member name="M:NvdaTestingDriver.NvdaDriver.ConnectAsync">
             <summary>
             Connects the driver asynchronously against a portable NVDA instance that will start automatically, configured with the options provided in the driver constructor.

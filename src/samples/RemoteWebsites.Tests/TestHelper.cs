@@ -58,6 +58,12 @@ namespace RemoteWebsites.Tests
 
 					// Build the accessibility tree up front, even if Chromium starts before NVDA.
 					op.AddArgument("--force-renderer-accessibility");
+
+					// Hide the "controlled by automated test software" bar and the save-password bubble,
+					// which NVDA would otherwise read out and which can take focus.
+					op.AddExcludedArgument("enable-automation");
+					op.AddUserProfilePreference("credentials_enable_service", false);
+					op.AddUserProfilePreference("profile.password_manager_enabled", false);
 					if (browser == "chromium")
 					{
 						if (string.IsNullOrWhiteSpace(binary))
@@ -96,7 +102,13 @@ namespace RemoteWebsites.Tests
 				NvdaDriver = new NvdaDriver(opt =>
 				{
 					opt.GeneralSettings.Language = NvdaTestingDriver.Settings.NvdaLanguage.English;
+
+					// Reading the whole page on load would talk over the announcements under test.
+					opt.BrowseModeSettings.AutoSayAllOnPageLoad = false;
 				});
+
+				// Keys sent through NVDA are real keystrokes: refuse to send them unless the test browser is in the foreground.
+				NvdaDriver.BeforeSendingKeys = WebDriverWrapper.EnsureBrowserWindowForeground;
 				await NvdaDriver.ConnectAsync();
 			}
 			catch (Exception ex)

@@ -11,6 +11,8 @@
 using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Text;
+using System.Threading;
 using OpenQA.Selenium;
 using OpenQA.Selenium.Chrome;
 using OpenQA.Selenium.Edge;
@@ -41,18 +43,53 @@ namespace NvdaTestingDriver.Selenium
 		/// <returns>IWebDriver instance</returns>
 		public IWebDriver UpWebDriver(Func<IWebDriver> webDriverFunc)
 		{
-			DateTime processStartTime = DateTime.Now;
 			WebDriver = webDriverFunc();
-			string processName = GetProcesName(WebDriver);
-			var browserProcesses = Process.GetProcessesByName(processName).Where(p => p.StartTime > processStartTime && !string.IsNullOrWhiteSpace(p.MainWindowTitle)).OrderBy(p => p.StartTime).ToList();
-			var process = browserProcesses.FirstOrDefault();
-			if (process != null)
+			GetProcesName(WebDriver);
+
+			// Find the browser's top-level window by giving the page a unique title. Matching by process
+			// would also match the user's own browser windows.
+			string marker = "nvda-testing-driver-" + Guid.NewGuid().ToString("N");
+			((IJavaScriptExecutor)WebDriver).ExecuteScript("document.title = arguments[0];", marker);
+			var deadline = DateTime.Now.AddSeconds(10);
+			while (_browserWindowHandle == IntPtr.Zero && DateTime.Now < deadline)
 			{
-				_browserWindowHandle = process.MainWindowHandle;
-				SetBrowserWindowForeground();
+				_browserWindowHandle = FindTopLevelWindow(marker);
+				if (_browserWindowHandle == IntPtr.Zero)
+				{
+					Thread.Sleep(200);
+				}
 			}
 
+			SetBrowserWindowForeground();
 			return WebDriver;
+		}
+
+		/// <summary>
+		/// Gets a value indicating whether the browser window is the foreground window, so keys sent through NVDA reach it.
+		/// </summary>
+		/// <returns><c>true</c> if the browser window is in the foreground.</returns>
+		public bool IsBrowserWindowForeground()
+		{
+			return _browserWindowHandle != IntPtr.Zero && NativeMethods.GetForegroundWindow() == _browserWindowHandle;
+		}
+
+		/// <summary>
+		/// Brings the browser window to the foreground, and throws if that is not possible.
+		/// Call it before sending keys through NVDA: they are real keystrokes, and go to whatever window is in the foreground.
+		/// </summary>
+		/// <exception cref="InvalidOperationException">The browser window could not be brought to the foreground.</exception>
+		public void EnsureBrowserWindowForeground()
+		{
+			for (int attempt = 0; attempt < 5 && !IsBrowserWindowForeground(); attempt++)
+			{
+				ActivateBrowserWindow();
+				Thread.Sleep(200);
+			}
+
+			if (!IsBrowserWindowForeground())
+			{
+				throw new InvalidOperationException("The browser window is not in the foreground, so keys sent through NVDA would go to another window. Don't use the machine while the tests run.");
+			}
 		}
 
 		/// <summary>
@@ -60,13 +97,56 @@ namespace NvdaTestingDriver.Selenium
 		/// </summary>
 		public void SetBrowserWindowForeground()
 		{
-			if (_browserWindowHandle != IntPtr.Zero)
-			{
-				NativeMethods.SetForegroundWindow(_browserWindowHandle);
-			}
-
 			WebDriver.Manage().Window.Maximize();
 			WebDriver.Manage().Window.FullScreen();
+			ActivateBrowserWindow();
+		}
+
+		private static IntPtr FindTopLevelWindow(string titleFragment)
+		{
+			IntPtr found = IntPtr.Zero;
+			var title = new StringBuilder(512);
+			NativeMethods.EnumWindows(
+				(hWnd, lParam) =>
+				{
+					title.Clear();
+					NativeMethods.GetWindowText(hWnd, title, title.Capacity);
+					if (NativeMethods.IsWindowVisible(hWnd) && title.ToString().Contains(titleFragment))
+					{
+						found = hWnd;
+						return false;
+					}
+
+					return true;
+				},
+				IntPtr.Zero);
+			return found;
+		}
+
+		private void ActivateBrowserWindow()
+		{
+			if (_browserWindowHandle == IntPtr.Zero || !NativeMethods.IsWindow(_browserWindowHandle))
+			{
+				return;
+			}
+
+			// Windows only lets the foreground thread change the foreground window, so share its input state while doing it.
+			uint foregroundThread = NativeMethods.GetWindowThreadProcessId(NativeMethods.GetForegroundWindow(), out _);
+			uint currentThread = NativeMethods.GetCurrentThreadId();
+			bool attached = foregroundThread != currentThread && NativeMethods.AttachThreadInput(currentThread, foregroundThread, true);
+			try
+			{
+				NativeMethods.ShowWindow(_browserWindowHandle, NativeMethods.SwShow);
+				NativeMethods.BringWindowToTop(_browserWindowHandle);
+				NativeMethods.SetForegroundWindow(_browserWindowHandle);
+			}
+			finally
+			{
+				if (attached)
+				{
+					NativeMethods.AttachThreadInput(currentThread, foregroundThread, false);
+				}
+			}
 		}
 
 		/// <summary>

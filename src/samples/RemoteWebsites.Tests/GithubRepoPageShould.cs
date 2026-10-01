@@ -12,6 +12,7 @@ namespace RemoteWebsites.Tests
 	{
 
 		[TestMethod]
+		[Ignore("The expected text is from GitHub's 2019 page; kept as an example.")]
 		public async Task CheckDownloadButtonIsCollapsibleAndExpandibleAsync()
 		{
 			

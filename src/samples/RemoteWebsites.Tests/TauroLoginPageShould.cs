@@ -1,0 +1,212 @@
+using System;
+using System.Threading;
+using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NvdaTestingDriver;
+using NvdaTestingDriver.Commands.NvdaCommands;
+using NvdaTestingDriver.MSTest;
+using NvdaTestingDriver.Selenium.Extensions;
+using OpenQA.Selenium;
+
+namespace RemoteWebsites.Tests
+{
+	/// <summary>
+	/// Checks what NVDA announces on the Tauro dashboard login page.
+	/// Expected texts come from NVDA 2026.2 with Chrome; NvdaAssert.TextContains ignores line breaks and extra spaces.
+	/// When reporting focus, NVDA says "focused" between the role and the state, so those are checked separately.
+	/// </summary>
+	[TestClass]
+	public class TauroLoginPageShould
+	{
+		private const string LoginUrl = "https://dashboard.tauro-research.com/login";
+
+		private const string EmailField = "input[name=email]";
+
+		private const string PasswordField = "input[name=password]";
+
+		private const string SubmitButton = "button[type=submit]";
+
+		[TestInitialize]
+		public void OpenLoginPage()
+		{
+			TestHelper.WebDriver.Navigate().GoToUrl(LoginUrl);
+			WaitForElement(EmailField);
+			TestHelper.WebDriverWrapper.SetBrowserWindowForeground();
+			TestHelper.WebDriver.FocusOnWindow();
+		}
+
+		[TestMethod]
+		public async Task AnnounceThePageTitle()
+		{
+			string text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(NavigatingSystemFocusCommands.ReportTitle);
+			NvdaAssert.TextContains(text, "Login Tauro Dashboard");
+		}
+
+		[TestMethod]
+		public async Task AnnounceTheMainHeading()
+		{
+			string text = await FocusAndReportAsync("h1");
+			NvdaAssert.TextContains(text, "Login heading");
+			NvdaAssert.TextContains(text, "level 1");
+		}
+
+		[TestMethod]
+		public async Task AnnounceTheSkipLink()
+		{
+			string text = await FocusAndReportAsync("a[href='#main-content']");
+			NvdaAssert.TextContains(text, "Skip to main content");
+			NvdaAssert.TextContains(text, "link");
+		}
+
+		[TestMethod]
+		public async Task AnnounceTheEmailFieldWithItsLabelAndPlaceholder()
+		{
+			string text = await FocusAndReportAsync(EmailField);
+			NvdaAssert.TextContains(text, "Email");
+			NvdaAssert.TextContains(text, "edit");
+			NvdaAssert.TextContains(text, "Enter your email");
+		}
+
+		[TestMethod]
+		public async Task AnnounceTheEmailFieldAsRequired()
+		{
+			// Known issue: the label's asterisk is read as "star", but the input has no required/aria-required,
+			// so NVDA never says "required". Fix: add required to the input and aria-hidden="true" to the asterisk.
+			string text = await FocusAndReportAsync(EmailField);
+			NvdaAssert.TextContains(text, "required");
+		}
+
+		[TestMethod]
+		public async Task AnnounceThePasswordFieldAsProtected()
+		{
+			string text = await FocusAndReportAsync(PasswordField);
+			NvdaAssert.TextContains(text, "Password edit");
+			NvdaAssert.TextContains(text, "protected");
+			NvdaAssert.TextContains(text, "Enter your password");
+		}
+
+		[TestMethod]
+		public async Task AnnounceTheShowPasswordToggleAndItsState()
+		{
+			string text = await FocusAndReportAsync("button[aria-controls][aria-pressed]");
+			NvdaAssert.TextContains(text, "Show password toggle button");
+			NvdaAssert.TextContains(text, "not pressed");
+
+			text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.Space);
+			NvdaAssert.TextContains(text, "pressed");
+			Assert.IsFalse(NvdaTestHelper.TextContains(text, "not pressed"), $"NVDA should announce the toggle as pressed. NVDA said: \"{text}\"");
+		}
+
+		[TestMethod]
+		public async Task AnnounceTheRememberMeCheckboxAndItsState()
+		{
+			string text = await FocusAndReportAsync("button[role=checkbox]");
+			NvdaAssert.TextContains(text, "Remember me check box");
+			NvdaAssert.TextContains(text, "not checked");
+
+			text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.Space);
+			NvdaAssert.TextContains(text, "checked");
+			Assert.IsFalse(NvdaTestHelper.TextContains(text, "not checked"), $"NVDA should announce the checkbox as checked. NVDA said: \"{text}\"");
+		}
+
+		[TestMethod]
+		public async Task AnnounceTheSubmitButton()
+		{
+			string text = await FocusAndReportAsync(SubmitButton);
+			NvdaAssert.TextContains(text, "Continue button");
+		}
+
+		[TestMethod]
+		public async Task MoveThroughTheFormInALogicalTabOrder()
+		{
+			await FocusAndReportAsync(EmailField);
+
+			string[] expectedStops =
+			{
+				"Password edit",
+				"Show password toggle button",
+				"Remember me check box",
+				"Continue button",
+				"Forgot your password? link",
+				"Create an account link",
+			};
+
+			foreach (var expected in expectedStops)
+			{
+				string text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.Tab);
+				NvdaAssert.TextContains(text, expected);
+			}
+		}
+
+		[TestMethod]
+		public async Task AnnounceTheEmailErrorWhenSubmittingAnEmptyForm()
+		{
+			await FocusAndReportAsync(SubmitButton);
+			string text = await PressEnterAndListenAsync(TimeSpan.FromSeconds(6));
+
+			// The form moves focus to the first invalid field, and NVDA reads its error message.
+			NvdaAssert.TextContains(text, "Email");
+			NvdaAssert.TextContains(text, "invalid entry");
+			NvdaAssert.TextContains(text, "Enter a valid email address");
+		}
+
+		[TestMethod]
+		public async Task AnnounceThePasswordErrorWhenSubmittingAnEmptyForm()
+		{
+			await FocusAndReportAsync(SubmitButton);
+			await PressEnterAndListenAsync(TimeSpan.FromSeconds(6));
+
+			string text = await FocusAndReportAsync(PasswordField);
+			NvdaAssert.TextContains(text, "invalid entry");
+			NvdaAssert.TextContains(text, "Enter your password");
+		}
+
+		[TestMethod]
+		public async Task AnnounceAnErrorWhenTheCredentialsAreWrong()
+		{
+			TestHelper.WebDriver.FindElement(By.CssSelector(EmailField)).SendKeys("nvda-test@example.com");
+			TestHelper.WebDriver.FindElement(By.CssSelector(PasswordField)).SendKeys("not-a-real-password");
+			await FocusAndReportAsync(SubmitButton);
+
+			string text = await PressEnterAndListenAsync(TimeSpan.FromSeconds(10));
+			Console.WriteLine($"NVDA said after a wrong login: \"{text}\"");
+
+			// The page shows the error in its role="alert" paragraph; NVDA should read that out without the user moving focus.
+			string alertText = TestHelper.WebDriver.FindElement(By.CssSelector("form [role=alert]")).Text;
+			Assert.IsFalse(string.IsNullOrWhiteSpace(alertText), $"The page should show an error message. NVDA said: \"{text}\"");
+			NvdaAssert.TextContains(text, alertText);
+		}
+
+		private static async Task<string> FocusAndReportAsync(string cssSelector)
+		{
+			TestHelper.WebDriver.Focus(TestHelper.WebDriver.FindElement(By.CssSelector(cssSelector)));
+			Thread.Sleep(500);
+			return await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(NavigatingSystemFocusCommands.ReportCurrentFocus);
+		}
+
+		private static async Task<string> PressEnterAndListenAsync(TimeSpan timeout)
+		{
+			await TestHelper.NvdaDriver.StopReadingAsync();
+
+			// Wait for 2 seconds of silence, so announcements that follow a server round trip are included.
+			return await TestHelper.NvdaDriver.GetNextSpokenMessageAsync(timeout, TimeSpan.FromSeconds(2), () => TestHelper.NvdaDriver.SendKeysAsync(Key.Enter));
+		}
+
+		private static void WaitForElement(string cssSelector)
+		{
+			var deadline = DateTime.Now.AddSeconds(20);
+			while (TestHelper.WebDriver.FindElements(By.CssSelector(cssSelector)).Count == 0)
+			{
+				if (DateTime.Now > deadline)
+				{
+					throw new TimeoutException($"{cssSelector} did not appear on {LoginUrl}.");
+				}
+
+				Thread.Sleep(250);
+			}
+
+			// Let the page finish hydrating, so focus and state changes are handled by the app.
+			Thread.Sleep(1000);
+		}
+	}
+}
