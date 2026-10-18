@@ -57,7 +57,7 @@ namespace NvdaTestingDriver.Commands.NvdaCommands
 		/// <value>
 		/// The move to previous column command.
 		/// </value>
-		public static NvdaCommand MoveToPreviousColumn => new NvdaCommand(new KeyCombination { Key.Control, Key.LeftAlt, Key.RightArrow });
+		public static NvdaCommand MoveToPreviousColumn => new NvdaCommand(new KeyCombination { Key.Control, Key.LeftAlt, Key.LeftArrow });
 
 		/// <summary>
 		/// Gets the command to moves the system caret to the next row (staying in the same column).

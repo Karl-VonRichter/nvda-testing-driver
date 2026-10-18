@@ -32,6 +32,8 @@ namespace NvdaTestingDriver
 		/// <returns>true if <paramref name="text"/> contains <paramref name="expectedText"/>, false, otherwise</returns>
 		public static bool TextContains(string text, string expectedText)
 		{
+			if (text == null) throw new ArgumentNullException(nameof(text));
+			if (expectedText == null) throw new ArgumentNullException(nameof(expectedText));
 			text = NormalizeText(text);
 			expectedText = NormalizeText(expectedText);
 
@@ -46,7 +48,7 @@ namespace NvdaTestingDriver
 		/// <returns>The normalized text</returns>
 		private static string NormalizeText(string text)
 		{
-			text = _lineBreakssRegex.Replace(text, " ");
+			text = _lineBreakssRegex.Replace(text.Replace("-", " "), " ");
 			text = _spacesAndTabsRegex.Replace(text, " ");
 			text = text.Trim();
 
@@ -54,7 +56,6 @@ namespace NvdaTestingDriver
 			// As long as it is not fixed, it is necessary to remove the
 			// hyphens from the texts to avoid inconsistencies between the message returned
 			// in the voice viewer, and the message returned by NVDA to the driver.
-			text = text.Replace("-", " ");
 			return text;
 		}
 	}
