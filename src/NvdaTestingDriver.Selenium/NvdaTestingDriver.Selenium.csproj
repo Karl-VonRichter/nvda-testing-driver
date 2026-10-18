@@ -43,8 +43,8 @@
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
 		</PackageReference>
-		<PackageReference Include="NvdaTestingDriver" Version="0.2.0-beta" />
-		<PackageReference Include="Selenium.WebDriver" Version="3.141.0" />
+		<ProjectReference Include="../NvdaTestingDriver/NvdaTestingDriver.csproj" />
+		<PackageReference Include="Selenium.WebDriver" Version="4.35.0" />
 		<PackageReference Include="StyleCop.Analyzers" Version="1.1.1-rc.94">
 			<PrivateAssets>all</PrivateAssets>
 			<IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>

@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <Deterministic>true</Deterministic>
+    <!-- Keep workstation paths out of compiled debug metadata. -->
+    <PathMap>$(MSBuildThisFileDirectory)=/_/</PathMap>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'NvdaTestingDriver' Or '$(MSBuildProjectName)' == 'NvdaTestingDriver.MSTest' Or '$(MSBuildProjectName)' == 'NvdaTestingDriver.Selenium'">
+    <PackageReadmeFile>readme.md</PackageReadmeFile>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(PackageReadmeFile)' != ''">
+    <None Include="$(MSBuildThisFileDirectory)..\readme.md" Pack="true" PackagePath="readme.md" />
+  </ItemGroup>
+</Project>
