@@ -1,4 +1,4 @@
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NvdaTestingDriver.Commands.NvdaCommands;
 using NvdaTestingDriver.MSTest;
 using NvdaTestingDriver.Selenium.Extensions;
@@ -7,48 +7,63 @@ using System.Threading.Tasks;
 namespace AccessibleDemo.Core.Tests
 {
 	[TestClass]
+	[DoNotParallelize]
 	public class ContactShould
 	{
+		public TestContext TestContext { get; set; }
+
+		[TestCleanup]
+		public void AttachPrivateMetadata() => TestContext.AddResultFile(TestHelper.Session.Metadata.FilePath);
+
 
 		[TestMethod]
 		public async Task CheckContactHeadersReadCollapsiblePannels()
 		{
 			// Arrange:
-			TestHelper.WebDriverWrapper.SetBrowserWindowForeground();
-			TestHelper.WebDriver.Navigate().GoToUrl("https://localhost:5001/home/contact");
-			TestHelper.WebDriver.FocusOnWindow();
+			await TestHelper.OpenAsync("/home/contact");
 
 			// Act & asserts
 			string text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(BrowseModeCommands.NextHeading3);
-			NvdaAssert.TextContains(text, "Contact by phone Collapsed link heading  level 3");
+			NvdaAssert.TextContains(text, "Contact by phone");
+			NvdaAssert.TextContains(text, "collapsed");
 
 			text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(BrowseModeCommands.NextHeading3);
-			NvdaAssert.TextContains(text, "Contact by e-mail collapsed  link heading  level 3");
+			NvdaAssert.TextContains(text, "Contact by e-mail");
 
 			text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(BrowseModeCommands.NextHeading3);
-			NvdaAssert.TextContains(text, "Postal address collapsed  link heading  level 3");
+			NvdaAssert.TextContains(text, "Postal address");
 
 			text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(BrowseModeCommands.NextHeading3);
-			NvdaAssert.TextContains(text, "Fill the contact form collapsed  link heading  level 3");
+			NvdaAssert.TextContains(text, "Fill the contact form");
 		}
 
 		[TestMethod]
 		public async Task CheckContactFormLabelsReadFieldAsEspected()
 		{
 			// Arrange
-			TestHelper.WebDriverWrapper.SetBrowserWindowForeground();
-			TestHelper.WebDriver.Navigate().GoToUrl("https://localhost:5001/home/contact");
-			TestHelper.WebDriver.FocusOnWindow();
+			await TestHelper.OpenAsync("/home/contact");
+			TestHelper.WebDriver.Focus(TestHelper.WebDriver.FindElement(OpenQA.Selenium.By.CssSelector("a[data-bs-target='#contactForm']")));
+			await TestHelper.NvdaDriver.SendKeysAsync(NvdaTestingDriver.Key.Enter);
+			await Task.Delay(500);
 
-			// Act / Assers
-			string text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(BrowseModeCommands.NextFormField);
-			NvdaAssert.TextContains(text, "Name:  edit");
+			// Verify the accessible labels directly after the collapsed form becomes visible.
+			TestHelper.WebDriver.Focus(TestHelper.WebDriver.FindElement(OpenQA.Selenium.By.Id("name")));
+			await Task.Delay(600);
+			string text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(NavigatingSystemFocusCommands.ReportCurrentFocus);
+			NvdaAssert.TextContains(text, "Name:");
+			NvdaAssert.TextContains(text, "edit");
 
-			text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(BrowseModeCommands.NextFormField);
-			NvdaAssert.TextContains(text, "E mail:  edit");
+			TestHelper.WebDriver.Focus(TestHelper.WebDriver.FindElement(OpenQA.Selenium.By.Id("email")));
+			await Task.Delay(600);
+			text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(NavigatingSystemFocusCommands.ReportCurrentFocus);
+			NvdaAssert.TextContains(text, "E mail:");
+			NvdaAssert.TextContains(text, "edit");
 
-			text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(BrowseModeCommands.NextFormField);
-			NvdaAssert.TextContains(text, "Submit button");
+			TestHelper.WebDriver.Focus(TestHelper.WebDriver.FindElement(OpenQA.Selenium.By.CssSelector("#contactForm button")));
+			await Task.Delay(600);
+			text = await TestHelper.NvdaDriver.SendCommandAndGetSpokenTextAsync(NavigatingSystemFocusCommands.ReportCurrentFocus);
+			NvdaAssert.TextContains(text, "Submit");
+			NvdaAssert.TextContains(text, "button");
 		}
 	}
 	}

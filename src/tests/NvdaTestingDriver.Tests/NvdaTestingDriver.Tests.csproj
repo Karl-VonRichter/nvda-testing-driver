@@ -10,5 +10,6 @@
     <ProjectReference Include="..\..\NvdaTestingDriver\NvdaTestingDriver.csproj" />
     <ProjectReference Include="..\..\NvdaTestingDriver.MSTest\NvdaTestingDriver.MSTest.csproj" />
     <ProjectReference Include="..\..\NvdaTestingDriver.Selenium\NvdaTestingDriver.Selenium.csproj" />
+    <Compile Include="..\..\samples\TestSupport\RunMetadata.cs" Link="TestSupport\RunMetadata.cs" />
   </ItemGroup>
 </Project>

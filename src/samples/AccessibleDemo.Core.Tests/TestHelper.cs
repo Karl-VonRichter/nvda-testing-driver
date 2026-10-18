@@ -1,166 +1,124 @@
-﻿using Microsoft.VisualStudio.TestTools.UnitTesting;
-using NvdaTestingDriver;
-using NvdaTestingDriver.Selenium;
-using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
+using System.Reflection;
+using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using NvdaTestingDriver;
+using NvdaTestingDriver.Selenium;
+using NvdaTestingDriver.Selenium.Extensions;
+using OpenQA.Selenium;
+using SampleTests;
 
 namespace AccessibleDemo.Core.Tests
 {
 	[TestClass]
 	public static class TestHelper
 	{
-
-		internal static WebDriverWrapper WebDriverWrapper = new WebDriverWrapper();
-
-		internal static IWebDriver WebDriver { get; private set; }
-
-
-		internal static NvdaDriver NvdaDriver;
-
+		internal static SampleTestSession Session { get; } = new SampleTestSession();
+		internal static WebDriverWrapper WebDriverWrapper => Session.Wrapper;
+		internal static IWebDriver WebDriver => Session.Browser;
+		internal static NvdaDriver NvdaDriver => Session.Nvda;
+		internal static string BaseUrl { get; private set; }
 		private static Process _webProcess;
 
 		[AssemblyInitialize]
 		public static async Task Initialize(TestContext context)
 		{
-			UpWebApp();
-			UpWebDriver();
-			await ConnectNvdaDriverAsync();
-		}
-
-
-		private static void UpWebApp()
-		{
+			SampleTestSession.RequireInteractiveDesktop();
 			try
 			{
-				var workingDir = Path.Combine(Path.GetDirectoryName(typeof(TestHelper).Assembly.Location), $@"..\..\..\..\AccessibleDemo\");
-				if (!Directory.Exists(workingDir))
-				{
-					throw new DirectoryNotFoundException(workingDir);
-				}
-
-				var processParameters = new ProcessStartInfo
-				{
-					FileName = "dotnet.exe",
-					WorkingDirectory = workingDir,
-					Arguments = "run",
-					RedirectStandardError = true,
-					RedirectStandardOutput = true
-				};
-				_webProcess = new Process();
-				_webProcess.OutputDataReceived += (sender, data) => { Console.WriteLine(data.Data); Debug.WriteLine(data.Data); };
-				_webProcess.ErrorDataReceived += (sender, data) => { Console.WriteLine(data.Data); Debug.WriteLine(data.Data); };
-				_webProcess.StartInfo = processParameters;
-				_webProcess.EnableRaisingEvents = true;
-				_webProcess.Start();
-				_webProcess.BeginErrorReadLine();
-				_webProcess.BeginOutputReadLine();
+				await StartWebAppAsync();
+				await Session.StartAsync(context);
 			}
-			catch (Exception ex)
+			catch
 			{
-				Console.WriteLine($"Error while starting webapp: {ex.Message}");
-				throw ex;
+				await Cleanup();
+				throw;
 			}
 		}
 
-		private static void UpWebDriver()
+		private static async Task StartWebAppAsync()
 		{
-			try
+			var listener = new TcpListener(IPAddress.Loopback, 0);
+			listener.Start();
+			int port = ((IPEndPoint)listener.LocalEndpoint).Port;
+			listener.Stop();
+			BaseUrl = $"http://127.0.0.1:{port}";
+			string project = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "AccessibleDemo"));
+			string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent.Name;
+			string assembly = Path.Combine(project, "bin", configuration, "net8.0", "AccessibleDemo.dll");
+			if (!File.Exists(assembly)) throw new FileNotFoundException("Build the local demo before running its tests.", assembly);
+			var attributes = Assembly.LoadFrom(assembly).GetCustomAttributes<AssemblyMetadataAttribute>();
+			Session.Metadata.Url = BaseUrl;
+			Session.Metadata.Organisation = "Local example";
+			Session.Metadata.Revision = attributes.FirstOrDefault(a => a.Key == "DeploymentRevision")?.Value ?? "unavailable";
+			Session.Metadata.BuildTimestamp = attributes.FirstOrDefault(a => a.Key == "BuildTimestampUtc")?.Value ?? "unavailable";
+			Session.Metadata.Save();
+			Console.WriteLine("Private run metadata ID: " + Session.Metadata.RunId);
+			var start = new ProcessStartInfo("dotnet")
 			{
-				WebDriver = WebDriverWrapper.UpWebDriver(() =>
-				{
-					var op = new ChromeOptions
-					{
-						AcceptInsecureCertificates = true
-					};
-					var webDriver = new ChromeDriver(Environment.CurrentDirectory, op);
-					webDriver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromMinutes(3);
-					webDriver.Manage().Window.Maximize();
-					return webDriver;
-				});
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine($"Error while starting Chrome WebDriver: {ex.Message}");
-				throw ex;
-			}
-		}
-
-
-		private static async Task ConnectNvdaDriverAsync()
-		{
-			try
-			{
-				NvdaDriver = new NvdaDriver(opt =>
-				{
-					opt.GeneralSettings.Language = NvdaTestingDriver.Settings.NvdaLanguage.English;
-				});
-				await NvdaDriver.ConnectAsync();
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine($"Error while starting NVDA driver: {ex.Message}");
-				throw ex;
-			}
-		}
-
-		private static void EndProcessTree(int pid)
-		{
-			Process.Start(new ProcessStartInfo
-			{
-				FileName = "taskkill",
-				Arguments = $"/pid {pid} /f /t",
+				WorkingDirectory = project,
+				UseShellExecute = false,
 				CreateNoWindow = true,
-				UseShellExecute = false
-			}).WaitForExit();
+				RedirectStandardOutput = true,
+				RedirectStandardError = true,
+			};
+			start.ArgumentList.Add(assembly);
+			start.ArgumentList.Add("--urls");
+			start.ArgumentList.Add(BaseUrl);
+			start.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+			_webProcess = new Process { StartInfo = start };
+			_webProcess.OutputDataReceived += (_, e) => { if (e.Data != null) Console.WriteLine(e.Data); };
+			_webProcess.ErrorDataReceived += (_, e) => { if (e.Data != null) Console.WriteLine(e.Data); };
+			_webProcess.Start();
+			_webProcess.BeginOutputReadLine();
+			_webProcess.BeginErrorReadLine();
+			using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(1) };
+			var timer = Stopwatch.StartNew();
+			while (timer.Elapsed < TimeSpan.FromSeconds(30))
+			{
+				if (_webProcess.HasExited) throw new InvalidOperationException("The local demo exited before it was ready.");
+				try
+				{
+					using var response = await client.GetAsync(BaseUrl);
+					if (response.IsSuccessStatusCode) return;
+				}
+				catch (HttpRequestException) { }
+				catch (TaskCanceledException) { }
+				await Task.Delay(200);
+			}
+			throw new System.TimeoutException("The local demo did not start within 30 seconds.");
 		}
 
-
+		internal static async Task OpenAsync(string path)
+		{
+			WebDriver.Navigate().GoToUrl(BaseUrl + path);
+			await Session.FocusPageContentAsync();
+			WebDriver.Focus(WebDriver.FindElement(By.CssSelector("main")));
+			await Task.Delay(500);
+		}
 
 		[AssemblyCleanup]
 		public static async Task Cleanup()
 		{
-			try
+			try { await Session.StopAsync(); }
+			finally
 			{
-				WebDriver.Quit();
-			}
-			catch
-			{
-				// If the web  driver quit fails, we continue.
-			}
-
-			try
-			{
-				WebDriver.Dispose();
-			}
-			catch
-			{
-				// If the web  driver dispose fails, we continue.
-			}
-			try
-			{
-				EndProcessTree(_webProcess.Id);
-				_webProcess.WaitForExit();
-			}
-			catch
-			{
-				// If the web process killing fails, we continue.
-			}
-
-			try
-			{
-				await NvdaDriver.DisconnectAsync();
-			}
-			catch
-			{
-				// if disconnect fails, we continue.
+				if (_webProcess != null)
+				{
+					try
+					{
+						if (!_webProcess.HasExited) _webProcess.Kill(entireProcessTree: true);
+						await _webProcess.WaitForExitAsync();
+					}
+					finally { _webProcess.Dispose(); _webProcess = null; }
+				}
 			}
 		}
-
-
-
 	}
 }

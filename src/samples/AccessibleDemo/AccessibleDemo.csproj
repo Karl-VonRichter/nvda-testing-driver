@@ -22,5 +22,16 @@
     </Content>
   </ItemGroup>
 
+  <Target Name="RecordDeploymentMetadata" BeforeTargets="GetAssemblyAttributes" DependsOnTargets="InitializeSourceControlInformation">
+    <PropertyGroup>
+      <DeploymentRevision Condition="'$(DeploymentRevision)' == ''">$(SourceRevisionId)</DeploymentRevision>
+      <DeploymentRevision Condition="'$(DeploymentRevision)' == ''">unavailable</DeploymentRevision>
+      <BuildTimestampUtc Condition="'$(BuildTimestampUtc)' == ''">$([System.DateTime]::UtcNow.ToString('O'))</BuildTimestampUtc>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="DeploymentRevision" Value="$(DeploymentRevision)" />
+      <AssemblyMetadata Include="BuildTimestampUtc" Value="$(BuildTimestampUtc)" />
+    </ItemGroup>
+  </Target>
 
 </Project>

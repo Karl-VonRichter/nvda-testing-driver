@@ -21,7 +21,14 @@
 		<main id="main-content" tabindex="-1">@RenderBody()</main>
 		<hr />
 		<footer>
-			<p>NVDA Testing Driver — Local example</p>
+			<p>NVDA Testing Driver — <span id="example-organisation">Local example</span></p>
+			<details>
+				<summary id="example-version-toggle">Version</summary>
+				<dl>
+					<dt>Revision</dt><dd id="example-revision">@DeploymentInfo.Revision</dd>
+					<dt>Build timestamp (UTC)</dt><dd id="example-build-timestamp">@DeploymentInfo.BuildTimestamp</dd>
+				</dl>
+			</details>
 		</footer>
 	</div>
 	<script src="~/lib/jquery/dist/jquery.js"></script>

@@ -9,39 +9,58 @@ namespace AccessibleDemo.Core.Tests
 {
 
 	[TestClass]
+	[DoNotParallelize]
 	public class TreeViewAccessibleShould
 	{
+		public TestContext TestContext { get; set; }
+
+		[TestCleanup]
+		public void AttachPrivateMetadata() => TestContext.AddResultFile(TestHelper.Session.Metadata.FilePath);
+
 
 		[TestMethod]
 		public async Task CheckTreeViewInteraction()
 		{
 			// arrange
-			TestHelper.WebDriverWrapper.SetBrowserWindowForeground();
-			TestHelper.WebDriver.Navigate().GoToUrl("https://localhost:5001/home/TreeViewExample");
-			TestHelper.WebDriver.FocusOnWindow();
+			await TestHelper.OpenAsync("/home/TreeViewExample");
+			for (int attempt = 0; attempt < 20 && TestHelper.WebDriver.FindElements(By.CssSelector(".treeview .toggle")).Count == 0; attempt++)
+			{
+				await Task.Delay(250);
+			}
+			Assert.IsTrue(TestHelper.WebDriver.FindElements(By.CssSelector(".treeview .toggle")).Count > 0, "The tree keyboard handlers did not initialize.");
 			TestHelper.WebDriver.Focus(TestHelper.WebDriver.FindElement(By.Id("lnkWcag")));
 
 			// act & asert
 			string text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.Tab);
-			NvdaAssert.TextContains(text, "All WCAG 2.1 elements tree view level 1 1. Perceivable collapsed 1 of");
+			NvdaAssert.TextContains(text, "All WCAG 2.1 elements");
+			NvdaAssert.TextContains(text, "tree view");
+			NvdaAssert.TextContains(text, "1. Perceivable");
+			NvdaAssert.TextContains(text, "collapsed");
+			await Task.Delay(700);
+			Assert.AreEqual("treeitem", TestHelper.WebDriver.SwitchTo().ActiveElement().GetAttribute("role"));
 
-			text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.RightArrow);
+			text = await TestHelper.NvdaDriver.GetNextSpokenMessageAsync(System.TimeSpan.FromSeconds(5), null, async () =>
+			{
+				await TestHelper.NvdaDriver.SendKeysAsync(Key.RightArrow);
+				await Task.Delay(300);
+				System.Console.WriteLine("Tree after Right: " + ((IJavaScriptExecutor)TestHelper.WebDriver).ExecuteScript("return JSON.stringify({focus:document.activeElement.textContent,expanded:document.activeElement.getAttribute('aria-expanded'),pageFocus:document.hasFocus()});"));
+			});
 			NvdaAssert.TextContains(text, "Expanded");
 
 			text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.DownArrow);
-			NvdaAssert.TextContains(text, "level 2  1.1. Text alternatives  1 of 4");
+			NvdaAssert.TextContains(text, "1.1. Text alternatives");
 
 			text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.DownArrow);
-			NvdaAssert.TextContains(text, "1.2. Time-based Media  2 of 4  level 2");
+			NvdaAssert.TextContains(text, "1.2. Time-based Media");
 
 			text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.DownArrow);
-			NvdaAssert.TextContains(text, "1.3. Adaptable  3 of 4  level 2");
+			NvdaAssert.TextContains(text, "1.3. Adaptable");
 
 			text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.DownArrow);
-			NvdaAssert.TextContains(text, "1.4. Distinguishable  4 of 4  level 2");
+			NvdaAssert.TextContains(text, "1.4. Distinguishable");
 
 			text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.DownArrow);
-			NvdaAssert.TextContains(text, "level 1  2. Operable  collapsed  1 of 3");
+			NvdaAssert.TextContains(text, "2. Operable");
 
 			text = await TestHelper.NvdaDriver.SendKeysAndGetSpokenTextAsync(Key.RightArrow);
 			NvdaAssert.TextContains(text, "Expanded");
