@@ -2,24 +2,54 @@ name: .NET
 
 on:
   push:
-    branches: [ develop ]
+    branches: [master, main, develop]
   pull_request:
-    branches: [ master, develop ]
+    branches: [master, main, develop]
+  workflow_dispatch:
+    inputs:
+      run_interactive:
+        description: Run local NVDA samples on a dedicated interactive Windows runner
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
 
 jobs:
   build:
-
-    runs-on: self-hosted
-
+    runs-on: windows-latest
+    env:
+      NVDA_TEST_RUN_INTERACTIVE: 'false'
     steps:
-    - uses: actions/checkout@v2
-    - name: Setup .NET
-      uses: actions/setup-dotnet@v1
+    - uses: actions/checkout@v5
+    - uses: actions/setup-dotnet@v5
       with:
-        dotnet-version: 5.0.x
+        dotnet-version: 8.0.x
     - name: Restore dependencies
-      run: dotnet restore
+      run: dotnet restore src/NvdaTestingDriver.sln
     - name: Build
-      run: dotnet build --no-restore
+      run: dotnet build src/NvdaTestingDriver.sln --configuration Release --no-restore
     - name: Test
-      run: dotnet test --no-build --verbosity normal
+      run: dotnet test src/NvdaTestingDriver.sln --configuration Release --no-build --verbosity normal
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    - name: Test public source export
+      run: python -m unittest discover -s scripts/tests -v
+
+  interactive-samples:
+    if: github.event_name == 'workflow_dispatch' && inputs.run_interactive
+    runs-on: [self-hosted, Windows, X64, nvda-interactive]
+    timeout-minutes: 15
+    concurrency:
+      group: nvda-interactive
+      cancel-in-progress: false
+    env:
+      NVDA_TEST_RUN_INTERACTIVE: 'true'
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 8.0.x
+    - name: Run local screen-reader samples
+      run: dotnet test src/samples/AccessibleDemo.Core.Tests/AccessibleDemo.Core.Tests.csproj --configuration Release
