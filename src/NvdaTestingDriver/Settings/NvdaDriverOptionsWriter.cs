@@ -65,6 +65,8 @@ namespace NvdaTestingDriver.Settings
 [braille]
 	[[noBraille]]
 		port = """"
+[mouse]
+	enableMouseTracking = False
 [keyboard]
 	keyboardLayout = {(_nvdaDriverOptions.KeyboardSettings.KeyboardLayout == KeyboardLayout.Desktop ? "desktop" : "laptop")}
 	useCapsLockAsNVDAModifierKey = {_nvdaDriverOptions.KeyboardSettings.UseCapsLockAsNVDAModifierKey.ToFirstCapitalizedString()}

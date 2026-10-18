@@ -98,7 +98,6 @@ namespace NvdaTestingDriver.Selenium
 		public void SetBrowserWindowForeground()
 		{
 			WebDriver.Manage().Window.Maximize();
-			WebDriver.Manage().Window.FullScreen();
 			ActivateBrowserWindow();
 		}
 
