@@ -1,125 +1,62 @@
-﻿using System;
+using System;
 using System.Threading.Tasks;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using NvdaTestingDriver;
-using NvdaTestingDriver.Selenium;
 using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
+using SampleTests;
 
 namespace RemoteWebsites.Tests
 {
 	[TestClass]
 	public static class TestHelper
 	{
+		internal static SampleTestSession Session { get; } = new SampleTestSession();
+		internal static IWebDriver WebDriver => Session.Browser;
+		internal static NvdaDriver NvdaDriver => Session.Nvda;
+		internal static Uri PageUrl { get; private set; }
+		internal static string ElementSelector { get; private set; }
+		internal static string ExpectedText { get; private set; }
+		internal static WebsiteEvidence Evidence { get; private set; }
 
-		internal static WebDriverWrapper WebDriverWrapper = new WebDriverWrapper();
-
-		internal static IWebDriver WebDriver { get; private set; }
-
-
-		internal static NvdaDriver NvdaDriver;
-
-		/// <summary>
-		/// This method will be executed before starting any test
-		/// </summary>
-		/// <param name="context">The context.</param>
-		/// <returns>The task associated to this operation</returns>
 		[AssemblyInitialize]
 		public static async Task Initialize(TestContext context)
 		{
-
-			// Initialize the Selenium WebDriveer
-			UpWebDriver();
-
-			// Starts the NVDATestingDriver
-			await ConnectNvdaDriverAsync();
-		}
-
-		private static void UpWebDriver()
-		{
+			SampleTestSession.RequireInteractiveDesktop();
+			string url = Environment.GetEnvironmentVariable("NVDA_TEST_PAGE_URL");
+			ElementSelector = Environment.GetEnvironmentVariable("NVDA_TEST_ELEMENT_SELECTOR");
+			ExpectedText = Environment.GetEnvironmentVariable("NVDA_TEST_EXPECTED_TEXT");
+			if (string.IsNullOrWhiteSpace(url) || string.IsNullOrWhiteSpace(ElementSelector) || string.IsNullOrWhiteSpace(ExpectedText))
+				Assert.Inconclusive("Configure NVDA_TEST_PAGE_URL, NVDA_TEST_ELEMENT_SELECTOR, and NVDA_TEST_EXPECTED_TEXT to run this example.");
+			if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+				(uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) || !string.IsNullOrEmpty(uri.UserInfo))
+				throw new ArgumentException("NVDA_TEST_PAGE_URL must be an HTTP(S) URL without embedded credentials.");
+			PageUrl = uri;
+			string title = Environment.GetEnvironmentVariable("NVDA_TEST_PAGE_TITLE");
+			string announcement = Environment.GetEnvironmentVariable("NVDA_TEST_WINDOW_ANNOUNCEMENT");
+			if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(announcement))
+				Assert.Inconclusive("Configure the expected page title and exact NVDA window announcement to establish website context.");
+			Session.Metadata.Url = uri.AbsoluteUri;
 			try
 			{
-
-				// We started the WebDriver using the UpWebDriver method of the WebDriverWrapper class,
-				// to manage the chrome window, and get to put it in the foreground when necessary.
-				WebDriver = WebDriverWrapper.UpWebDriver(() =>
-				{
-					var op = new ChromeOptions
-					{
-						AcceptInsecureCertificates = false
-					};
-					var webDriver = new ChromeDriver(Environment.CurrentDirectory, op);
-					webDriver.Manage().Timeouts().AsynchronousJavaScript = TimeSpan.FromMinutes(3);
-					webDriver.Manage().Window.Maximize();
-					return webDriver;
-				});
+				await Session.StartAsync(context);
+				WebDriver.Navigate().GoToUrl(PageUrl.AbsoluteUri);
+				Session.Metadata.ReadDeployment(WebDriver,
+					Environment.GetEnvironmentVariable("NVDA_TEST_VERSION_TOGGLE_SELECTOR"),
+					Environment.GetEnvironmentVariable("NVDA_TEST_REVISION_SELECTOR"),
+					Environment.GetEnvironmentVariable("NVDA_TEST_BUILD_TIMESTAMP_SELECTOR"),
+					Environment.GetEnvironmentVariable("NVDA_TEST_ORGANISATION_SELECTOR"));
+				if (!Session.Metadata.HasDeploymentMetadata)
+					Assert.Inconclusive("Configure revision, build timestamp, and organisation selectors; deployment identity is required for a conclusive run.");
+				Evidence = new WebsiteEvidence(Session.Wrapper, Session.Nvda, PageUrl, title, announcement);
 			}
-			catch (Exception ex)
+			catch
 			{
-				Console.WriteLine($"Error while starting Chrome WebDriver: {ex.Message}");
+				await Session.StopAsync();
 				throw;
 			}
 		}
 
-
-		/// <summary>
-		/// Connects the nvda driver asynchronously.
-		/// </summary>
-		/// <returns></returns>
-		private static async Task ConnectNvdaDriverAsync()
-		{
-			try
-			{
-				// We start the NvdaTestingDriver:
-				NvdaDriver = new NvdaDriver(opt =>
-				{
-					opt.GeneralSettings.Language = NvdaTestingDriver.Settings.NvdaLanguage.English;
-				});
-				await NvdaDriver.ConnectAsync();
-			}
-			catch (Exception ex)
-			{
-				Console.WriteLine($"Error while starting NVDA driver: {ex.Message}");
-				throw;
-			}
-		}
-
-		/// <summary>
-		/// This method will be executed when all e tests are finished.
-		/// </summary>
-		/// <returns></returns>
 		[AssemblyCleanup]
-		public static async Task Cleanup()
-		{
-			try
-			{
-				WebDriver.Quit();
-			}
-			catch
-			{
-				// If the web  driver quit fails, we continue.
-			}
-
-			try
-			{
-				WebDriver.Dispose();
-			}
-			catch
-			{
-				// If the web  driver dispose fails, we continue.
-			}
-
-			try
-			{
-				await NvdaDriver.DisconnectAsync();
-			}
-			catch
-			{
-				// if disconnect fails, we continue.
-			}
-		}
-
-
-
+		public static Task Cleanup() => Session.StopAsync();
 	}
 }
