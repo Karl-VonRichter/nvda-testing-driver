@@ -1,37 +1,14 @@
-﻿/* Please see documentation at https://docs.microsoft.com/aspnet/core/client-side/bundling-and-minification\ 
-for details on configuring this project to bundle and minify static web assets. */
-body {
-    padding-top: 50px;
-    padding-bottom: 20px;
-}
-
-/* Wrapping element */
-/* Set some basic padding to keep content from hitting the edges */
-.body-content {
-    padding-left: 15px;
-    padding-right: 15px;
-}
-
-/* Carousel */
-.carousel-caption p {
-    font-size: 20px;
-    line-height: 1.4;
-}
-
-/* Make .svg files in the carousel display properly in older browsers */
-.carousel-inner .item img[src$=".svg"] {
-    width: 100%;
-}
-
-/* QR code generator */
-#qrCode {
-    margin: 15px;
-}
-
-/* Hide/rearrange for smaller screens */
-@media screen and (max-width: 767px) {
-    /* Hide captions */
-    .carousel-caption {
-        display: none;
-    }
-}
+body { padding-bottom: 1.5rem; }
+section { margin-block: 2rem; }
+input, button { margin: 0.25rem; }
+table { border-collapse: collapse; margin-block: 1rem; }
+th, td { padding: 0.5rem 1rem; border: 1px solid #666; }
+caption { caption-side: top; }
+dialog { max-width: min(90vw, 36rem); padding: 1.5rem; }
+dialog::backdrop { background: rgb(0 0 0 / 35%); }
+:focus-visible { outline: 3px solid #075bb5; outline-offset: 3px; }
+.treeview ul { list-style: none; padding-left: 1.5rem; }
+.treeview li { position: relative; }
+.treeview .toggle { display: inline-block; width: 1rem; }
+.treeview .toggle.collapsed::before { content: "\25B8"; }
+.treeview .toggle.expanded::before { content: "\25BE"; }

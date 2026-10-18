@@ -1,4 +1,4 @@
-﻿$(function () {
+$(function () {
 	if ($('.treeview').length) {
 		var $tree = $('.treeview ul:first');
 		$tree.attr({ 'role': 'tree' });
@@ -9,15 +9,13 @@
 		var lastNodeIdx = $allNodes.length - 1;//last list item node's index
 		var $lastNode = $allNodes.eq(lastNodeIdx);//last list item node visible
 		function toggleGroup($node) {
-			$toggle = $('> div', $node);
-			$childList = $('> ul', $node);
-			$childList.slideToggle('fast', function () {
-				//update relevant vars when a node is expanded/collapsed
-				$allNodes = $('li:visible', $tree);
-				lastNodeIdx = $allNodes.length - 1;
-				$lastNode = $allNodes.eq(lastNodeIdx);
-			}
-			);
+			var $toggle = $('> div', $node);
+			var $childList = $('> ul', $node);
+			$childList.toggle();
+			// Update immediately so rapid arrow presses follow the visible tree.
+			$allNodes = $('li:visible', $tree);
+			lastNodeIdx = $allNodes.length - 1;
+			$lastNode = $allNodes.eq(lastNodeIdx);
 			if ($toggle.hasClass('collapsed')) {
 				$toggle.removeClass('collapsed').addClass('expanded');
 				$('> a', $node).attr({ 'aria-expanded': 'true', 'tabindex': '0' }).focus();
@@ -43,6 +41,7 @@
 
 			if (dir == 'parent') {
 				var parentNodeIdx = $allNodes.index($el.parent().parent().parent());
+				if (parentNodeIdx < 0) return false;
 				var $nextEl = $('> a', $allNodes.eq(parentNodeIdx));
 			} else {
 				var $nextEl = $('> a', $allNodes.eq(thisNodeIdx + operand));
@@ -61,7 +60,7 @@
 			//if children exist
 			if ($node.has('ul').length) {
 				$node.addClass('hasChildren');
-				$childList = $('ul', $node);
+				var $childList = $('ul', $node);
 				$childList.attr({ 'role': 'group' }).hide();
 				//add toggle element and set aria-expanded on the link
 				$('<div aria-hidden="true" class="toggle collapsed">').insertBefore($el);
@@ -82,6 +81,7 @@
 							nextNodeLink($(this), 'down');
 							break;
 						case 37: //left
+							e.preventDefault();
 							if ($(this).attr('aria-expanded') == 'false' || $node.is('.noChildren')) {
 								nextNodeLink($(this), 'parent');
 							} else {
@@ -89,16 +89,19 @@
 							}
 							break;
 						case 39: //right
+							e.preventDefault();
 							if ($(this).attr('aria-expanded') == 'true') {
 								nextNodeLink($(this), 'down');
-							} else {
+							} else if ($node.is('.hasChildren')) {
 								toggleGroup($node);
 							}
 							break;
 					}
 				}
 			}
-			).on('focus', function () {//update aria-selected when focussed node changes
+			).on('focus', function () {//update aria-selected and the tab stop when focus changes
+				$('[role=treeitem]', $tree).attr('tabindex', '-1');
+				$(this).attr('tabindex', '0');
 				$('[aria-selected="true"]', $tree).attr('aria-selected', 'false');
 				$(this).attr('aria-selected', 'true');
 			}
@@ -119,7 +122,7 @@
 				var $ul = $iteratingElement.find("ul:first");
 				var $divToggle = $iteratingElement.find("div:first");
 				$divToggle.removeClass("collapsed");
-				$linkElement = $iteratingElement.find("a:first");
+				var $linkElement = $iteratingElement.find("a:first");
 				$linkElement.attr("aria-expanded", "true");
 				$ul.show();
 				$allNodes = $('li:visible', $tree);

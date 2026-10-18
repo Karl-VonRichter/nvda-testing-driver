@@ -5,13 +5,18 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using AccessibleDemo.Models;
-using Newtonsoft.Json;
+using System.Text.Json;
+using Microsoft.AspNetCore.Hosting;
 using System.IO;
 
 namespace AccessibleDemo.Controllers
 {
 	public class HomeController : Controller
 	{
+		private readonly IWebHostEnvironment _environment;
+
+		public HomeController(IWebHostEnvironment environment) => _environment = environment;
+
 		public IActionResult Index()
 		{
 			return View();
@@ -44,8 +49,9 @@ namespace AccessibleDemo.Controllers
 
 		public async Task<IActionResult> TreeViewExample()
 		{
-			var viewModel = JsonConvert.DeserializeObject<TreeViewViewModel>(
-				System.IO.File.ReadAllText(Path.Combine(Environment.CurrentDirectory, "wwwroot", "jsonFiles", "wcag21.json")));
+			var viewModel = JsonSerializer.Deserialize<TreeViewViewModel>(
+				await System.IO.File.ReadAllTextAsync(Path.Combine(_environment.WebRootPath, "jsonFiles", "wcag21.json")),
+				new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
 			return await Task.FromResult(View(viewModel));
 		}
