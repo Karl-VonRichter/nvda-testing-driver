@@ -121,6 +121,15 @@ namespace NvdaTestingDriver
 		internal event EventHandler OnSpeakCancelled;
 
 		/// <summary>
+		/// Gets or sets an action run before any keys are sent to NVDA. Keys sent through NVDA are real keystrokes that reach
+		/// the foreground window, so use this to check the application under test is in the foreground (throw to stop the send).
+		/// </summary>
+		/// <value>
+		/// The action to run before sending keys.
+		/// </value>
+		public Action BeforeSendingKeys { get; set; }
+
+		/// <summary>
 		/// Connects the driver asynchronously against a portable NVDA instance that will start automatically, configured with the options provided in the driver constructor.
 		/// </summary>
 		/// <returns>The task associated to this operation.</returns>
@@ -937,6 +946,7 @@ namespace NvdaTestingDriver
 		private async Task SendKeysInternalAsync(Key[] keys)
 		{
 			CheckConnectivity();
+			BeforeSendingKeys?.Invoke();
 
 			foreach (var k in keys)
 			{
@@ -967,9 +977,19 @@ namespace NvdaTestingDriver
 		/// Shutdowns the nvda instance, by sending a Nvda+Q keystroke.
 		/// </summary>
 		/// <returns>The task associated to this operation</returns>
-		private Task ShutdownNvda()
+		private async Task ShutdownNvda()
 		{
-			return SendCommandAsync(BasicCommands.QuitNvda);
+			// NVDA consumes its own quit gesture, so it is safe to send whatever window is in the foreground.
+			var beforeSendingKeys = BeforeSendingKeys;
+			BeforeSendingKeys = null;
+			try
+			{
+				await SendCommandAsync(BasicCommands.QuitNvda);
+			}
+			finally
+			{
+				BeforeSendingKeys = beforeSendingKeys;
+			}
 		}
 	}
 }
