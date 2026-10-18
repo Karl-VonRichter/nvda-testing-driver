@@ -21,14 +21,17 @@ namespace NvdaTestingDriver.Settings
 	internal class NvdaDriverOptionsWriter
 	{
 		private readonly NvdaDriverOptions _nvdaDriverOptions;
+		private readonly string _remoteAccessKey;
 
 		/// <summary>
 		/// Initializes a new instance of the <see cref="NvdaDriverOptionsWriter"/> class.
 		/// </summary>
 		/// <param name="nvdaDriverOptions">The nvda driver options.</param>
-		internal NvdaDriverOptionsWriter(NvdaDriverOptions nvdaDriverOptions)
+		/// <param name="remoteAccessKey">The random key shared by this test session and NVDA.</param>
+		internal NvdaDriverOptionsWriter(NvdaDriverOptions nvdaDriverOptions, string remoteAccessKey)
 		{
 			_nvdaDriverOptions = nvdaDriverOptions;
+			_remoteAccessKey = remoteAccessKey;
 		}
 
 		/// <summary>
@@ -52,7 +55,7 @@ namespace NvdaTestingDriver.Settings
 	saveConfigurationOnExit = False
 	askToExit = False
 	playStartAndExitSounds = {_nvdaDriverOptions.GeneralSettings.PlayStartAndExitSounds.ToFirstCapitalizedString()}
-	loggingLevel = DEBUG
+	loggingLevel = INFO
 [speech]
 	synth = silence
 	autoLanguageSwitching = {_nvdaDriverOptions.SpeechSettings.AutoLanguageSwitching.ToFirstCapitalizedString()}
@@ -143,10 +146,29 @@ namespace NvdaTestingDriver.Settings
 		connectionMode = 0
 		host = {NvdaDriver.LocalHost}
 		port = {NvdaDriver.NvdaRemotePort}
-		key = {NvdaDriver.NvdaRemoteKey}
+		key = {_remoteAccessKey}
 	[[ui]]
 		confirmDisconnectAsFollower = False";
 			File.WriteAllText(iniFilePath, iniFileContent, Encoding.ASCII);
+		}
+
+		/// <summary>
+		/// Writes the separate configuration used by the bundled legacy Remote add-on.
+		/// </summary>
+		/// <param name="iniFilePath">The session's remote.ini path.</param>
+		internal void WriteLegacyRemoteOptionsToIniFile(string iniFilePath)
+		{
+			File.WriteAllText(iniFilePath, $@"[connections]
+last_connected = list()
+[controlserver]
+autoconnect = True
+self_hosted = True
+connection_type = 0
+host = {NvdaDriver.LocalHost}
+port = {NvdaDriver.NvdaRemotePort}
+key = {_remoteAccessKey}
+[seen_motds]
+", Encoding.ASCII);
 		}
 
 		/// <summary>

@@ -45,10 +45,6 @@ namespace NvdaTestingDriver
 
 		internal const int NvdaRemotePort = 6837;
 
-		internal const string NvdaRemoteKey = "NvdaRemote";
-
-		private const string SetConnectionMsg = "{\"connection_type\": \"master\", \"type\": \"join\", \"channel\": \"" + NvdaRemoteKey + "\"}\n";
-
 		private const string SetCommunicationProtocolMsg = "{\"version\": 2, \"type\": \"protocol_version\"}";
 
 		private const string NvdaRegistryKey = @"Software\KastweySoftware\NvdaTestingDriver";
@@ -76,6 +72,12 @@ namespace NvdaTestingDriver
 
 		private Task _taskReceivingMessages;
 
+		private string _configurationDirectory;
+
+		private bool _startedNvda;
+
+		private bool _sessionReady;
+
 		/// <summary>
 		/// Initializes a new instance of the <see cref="NvdaDriver"/> class.
 		/// </summary>
@@ -83,7 +85,7 @@ namespace NvdaTestingDriver
 		public NvdaDriver(NvdaDriverOptions options)
 		{
 			CheckWindowsOS();
-			_nvdaDriverOptions = options;
+			_nvdaDriverOptions = options ?? throw new ArgumentNullException(nameof(options));
 		}
 
 		/// <summary>
@@ -130,7 +132,13 @@ namespace NvdaTestingDriver
 		public Action BeforeSendingKeys { get; set; }
 
 		/// <summary>
-		/// Connects the driver asynchronously against a portable NVDA instance that will start automatically, configured with the options provided in the driver constructor.
+		/// Gets the product version of the executable selected for the latest connection attempt.
+		/// This is the NVDA version, not the testing driver assembly version. Null before an executable is selected.
+		/// </summary>
+		public string NvdaVersion { get; private set; }
+
+		/// <summary>
+		/// Connects the driver asynchronously against an installed or bundled NVDA instance that will start automatically, configured with the options provided in the driver constructor.
 		/// </summary>
 		/// <returns>The task associated to this operation.</returns>
 		/// <exception cref="NvdaTestingDriver.Exceptions.AlreadyConnectedException">Throws if the method has been called before, and the driver is already connected</exception>
@@ -141,56 +149,87 @@ namespace NvdaTestingDriver
 				throw new AlreadyConnectedException();
 			}
 
-			var nvdaDriverOptionsWriter = new NvdaDriverOptionsWriter(_nvdaDriverOptions);
-			ProcessStartInfo processParam;
-			var installedNvdaExecutableFilePath = GetInstalledNvdaExecutableFilePath();
-			if (installedNvdaExecutableFilePath != null)
-			{
-				// Run the installed NVDA against a throwaway config directory, so the user's own settings are left untouched.
-				var configDirectory = Path.Combine(Path.GetTempPath(), "NvdaTestingDriver", "userConfig");
-				KillPreviousNVDA();
-				if (Directory.Exists(configDirectory))
-				{
-					Directory.Delete(configDirectory, true);
-				}
-
-				Directory.CreateDirectory(configDirectory);
-				nvdaDriverOptionsWriter.WriteOptionsToIniFile(Path.Combine(configDirectory, "nvda.ini"));
-				processParam = new ProcessStartInfo
-				{
-					FileName = installedNvdaExecutableFilePath,
-					Arguments = $"--config-path \"{configDirectory}\"",
-					// nvda.exe has a uiAccess manifest, which CreateProcess rejects with ERROR_ELEVATION_REQUIRED.
-					UseShellExecute = true,
-				};
-			}
-			else
-			{
-				var nvdaExecutableFilePath = GetNvdaExecutableFilePath();
-				var nvdaDirectory = Path.GetDirectoryName(nvdaExecutableFilePath);
-				nvdaDriverOptionsWriter.WriteOptionsToIniFile(Path.Combine(nvdaDirectory, "userConfig", "nvda.ini"));
-				KillPreviousNVDA();
-				processParam = new ProcessStartInfo { FileName = nvdaExecutableFilePath };
-			}
-
-			_nvdaProcess = Process.Start(processParam);
 			try
 			{
-				_nvdaProcess.WaitForInputIdle();
+				NvdaVersion = null;
+				string remoteAccessKey = Guid.NewGuid().ToString("N");
+				var nvdaDriverOptionsWriter = new NvdaDriverOptionsWriter(_nvdaDriverOptions, remoteAccessKey);
+				ProcessStartInfo processParam;
+				var installedNvdaExecutableFilePath = GetInstalledNvdaExecutableFilePath();
+				if (installedNvdaExecutableFilePath != null)
+				{
+					// Run the installed NVDA against a throwaway config directory, so the user's own settings are left untouched.
+					_configurationDirectory = Path.Combine(Path.GetTempPath(), "NvdaTestingDriver", Guid.NewGuid().ToString("N"));
+					var configDirectory = _configurationDirectory;
+					KillPreviousNVDA();
+					Directory.CreateDirectory(configDirectory);
+					nvdaDriverOptionsWriter.WriteOptionsToIniFile(Path.Combine(configDirectory, "nvda.ini"));
+					processParam = new ProcessStartInfo
+					{
+						FileName = installedNvdaExecutableFilePath,
+						Arguments = $"--config-path \"{configDirectory}\"",
+						// nvda.exe has a uiAccess manifest, which CreateProcess rejects with ERROR_ELEVATION_REQUIRED.
+						UseShellExecute = true,
+					};
+				}
+				else
+				{
+					var nvdaExecutableFilePath = GetNvdaExecutableFilePath();
+					var nvdaDirectory = Path.GetDirectoryName(nvdaExecutableFilePath);
+					_configurationDirectory = Path.Combine(Path.GetTempPath(), "NvdaTestingDriver", Guid.NewGuid().ToString("N"));
+					Directory.CreateDirectory(_configurationDirectory);
+					// The legacy portable copy needs its bundled Remote add-on in the isolated profile.
+					string addons = Path.Combine(nvdaDirectory, "userConfig", "addons");
+					foreach (string file in Directory.GetFiles(addons, "*", SearchOption.AllDirectories))
+					{
+						string target = Path.Combine(_configurationDirectory, "addons", file.Substring(addons.Length + 1));
+						Directory.CreateDirectory(Path.GetDirectoryName(target));
+						File.Copy(file, target);
+					}
+					nvdaDriverOptionsWriter.WriteOptionsToIniFile(Path.Combine(_configurationDirectory, "nvda.ini"));
+					nvdaDriverOptionsWriter.WriteLegacyRemoteOptionsToIniFile(Path.Combine(_configurationDirectory, "remote.ini"));
+					KillPreviousNVDA();
+					processParam = new ProcessStartInfo
+					{
+						FileName = nvdaExecutableFilePath,
+						Arguments = $"--config-path \"{_configurationDirectory}\"",
+						UseShellExecute = false,
+					};
+				}
+
+				var executableVersion = FileVersionInfo.GetVersionInfo(processParam.FileName);
+				NvdaVersion = executableVersion.ProductVersion ?? executableVersion.FileVersion;
+				_nvdaProcess = Process.Start(processParam);
+				_startedNvda = true;
+				try
+				{
+					_nvdaProcess.WaitForInputIdle(10000);
+				}
+				catch (InvalidOperationException)
+				{
+					// The installed nvda.exe may hand over to another process and exit before showing a message loop.
+				}
+				_tcpClient = new TcpClient();
+				await ConnectSocketAsync(LocalHost, NvdaRemotePort);
+				_networkStream = _tcpClient.GetStream();
+				_sslStream = new SslStream(_networkStream, false, (sender, certificate, chain, sslPolicyErrors) => true, null);
+				await AuthenticateRemoteAsync(_sslStream, TimeSpan.FromSeconds(10));
+				_cancellationTokenSource = new CancellationTokenSource();
+				BeginReadMessages();
+				await WriteMessageAsync(SetCommunicationProtocolMsg);
+				await WriteMessageAsync(new JObject
+				{
+					["connection_type"] = "master",
+					["type"] = "join",
+					["channel"] = remoteAccessKey,
+				}.ToString(Newtonsoft.Json.Formatting.None));
+				_sessionReady = true;
 			}
-			catch (InvalidOperationException)
+			catch
 			{
-				// The installed nvda.exe may hand over to another process and exit before showing a message loop.
+				await DisconnectAsync();
+				throw;
 			}
-			_tcpClient = new TcpClient();
-			await ConnectSocketAsync(LocalHost, NvdaRemotePort);
-			_networkStream = _tcpClient.GetStream();
-			_sslStream = new SslStream(_networkStream, false, (sender, certificate, chain, sslPolicyErrors) => true, null);
-			await _sslStream.AuthenticateAsClientAsync("nvdaremote.com");
-			_cancellationTokenSource = new CancellationTokenSource();
-			BeginReadMessages();
-			await WriteMessageAsync(SetCommunicationProtocolMsg);
-			await WriteMessageAsync(SetConnectionMsg);
 		}
 
 		/// <summary>
@@ -199,32 +238,48 @@ namespace NvdaTestingDriver
 		/// <returns>The task associated to this operation.</returns>
 		public async Task DisconnectAsync()
 		{
-			if (_sslStream != null && _sslStream.CanWrite)
-			{
-				await ShutdownNvda();
-			}
-
-			_cancellationTokenSource?.Cancel();
-			if (_taskReceivingMessages != null)
-			{
-				await Task.WhenAll(_taskReceivingMessages);
-			}
-
-			_tcpClient?.Close();
-			_tcpClient?.Dispose();
-			_sslStream?.Dispose();
-			_networkStream?.Dispose();
-			_nvdaProcess?.WaitForExit(10000);
 			try
 			{
-				_nvdaProcess?.Kill();
+				if (_sessionReady && _sslStream != null && _sslStream.CanWrite && _tcpClient != null && _tcpClient.Connected)
+					await ShutdownNvda();
 			}
-			catch
+			finally
 			{
-				// eror when killing nvda process.
+				_sessionReady = false;
+				_cancellationTokenSource?.Cancel();
+				// Closing the socket also unblocks reads on runtimes without cancellable SslStream reads.
+				_tcpClient?.Close();
+				_sslStream?.Dispose();
+				_networkStream?.Dispose();
+				try
+				{
+					if (_taskReceivingMessages != null) await _taskReceivingMessages;
+				}
+				finally
+				{
+					if (_startedNvda)
+					{
+						_nvdaProcess?.WaitForExit(10000);
+						KillPreviousNVDA();
+						_startedNvda = false;
+					}
+					_nvdaProcess?.Dispose();
+					_cancellationTokenSource?.Dispose();
+					_tcpClient = null;
+					_sslStream = null;
+					_networkStream = null;
+					_taskReceivingMessages = null;
+					_nvdaProcess = null;
+					_cancellationTokenSource = null;
+					if (_configurationDirectory != null)
+					{
+						try { Directory.Delete(_configurationDirectory, true); }
+						catch (IOException) { /* NVDA may still be releasing its log. */ }
+						catch (UnauthorizedAccessException) { /* Do not prevent transport cleanup. */ }
+						_configurationDirectory = null;
+					}
+				}
 			}
-
-			KillPreviousNVDA();
 		}
 
 		/// <summary>
@@ -536,11 +591,6 @@ namespace NvdaTestingDriver
 		}
 
 		/// <summary>
-		/// Gets the nvda executable file path from windows registry. If registry value does not exists,
-		/// it will extract the nvda.zip file into a temporary folder..
-		/// </summary>
-		/// <returns>The NVDA executable file path</returns>
-		/// <summary>
 		/// Gets the path of a usable NVDA 2025.1+ executable: the explicit one in the options, or the one installed on this machine.
 		/// </summary>
 		/// <returns>The executable path, or null if the bundled portable NVDA must be used instead.</returns>
@@ -553,6 +603,8 @@ namespace NvdaTestingDriver
 					throw new FileNotFoundException("The configured NVDA executable was not found.", _nvdaDriverOptions.NvdaExecutablePath);
 				}
 
+				if (!SupportsBuiltInRemote(_nvdaDriverOptions.NvdaExecutablePath))
+					throw new NotSupportedException("The configured NVDA executable must be version 2025.1 or later.");
 				return _nvdaDriverOptions.NvdaExecutablePath;
 			}
 
@@ -578,7 +630,14 @@ namespace NvdaTestingDriver
 
 			return candidates
 				.Where(c => !string.IsNullOrWhiteSpace(c) && File.Exists(c))
-				.FirstOrDefault(c => FileVersionInfo.GetVersionInfo(c).FileMajorPart >= MinimumInstalledNvdaYear);
+				.FirstOrDefault(SupportsBuiltInRemote);
+		}
+
+		private static bool SupportsBuiltInRemote(string path)
+		{
+			var version = FileVersionInfo.GetVersionInfo(path);
+			return version.FileMajorPart > MinimumInstalledNvdaYear ||
+				(version.FileMajorPart == MinimumInstalledNvdaYear && version.FileMinorPart >= 1);
 		}
 
 		private string GetNvdaExecutableFilePath()
@@ -679,9 +738,35 @@ namespace NvdaTestingDriver
 		/// <exception cref="NvdaTestingDriver.Exceptions.NotConnectedException">The driver is not yet connected. Use ConnectAsync to do that.</exception>
 		private void CheckConnectivity()
 		{
-			if (!_tcpClient.Connected || _networkStream == null || _sslStream == null || !_sslStream.CanWrite)
+			if (_tcpClient == null || !_tcpClient.Connected || _networkStream == null || _sslStream == null || !_sslStream.CanWrite)
 			{
 				throw new NotConnectedException("The driver is not yet connected. Use ConnectAsync to do that.");
+			}
+		}
+
+		/// <summary>
+		/// Authenticates the local Remote transport with a bounded TLS handshake.
+		/// </summary>
+		/// <param name="stream">The transport to authenticate.</param>
+		/// <param name="timeout">The maximum handshake duration.</param>
+		/// <returns>The task associated to this operation.</returns>
+		internal static async Task AuthenticateRemoteAsync(SslStream stream, TimeSpan timeout)
+		{
+			if (timeout <= TimeSpan.Zero) throw new ArgumentOutOfRangeException(nameof(timeout));
+			using (var cancellation = new CancellationTokenSource())
+			{
+				Task handshake = stream.AuthenticateAsClientAsync("nvdaremote.com");
+				Task deadline = Task.Delay(timeout, cancellation.Token);
+				if (await Task.WhenAny(handshake, deadline) != handshake)
+				{
+					// Disposing interrupts the pending handshake on .NET Standard 2.0 runtimes.
+					stream.Dispose();
+					_ = handshake.ContinueWith(task => { _ = task.Exception; },
+						CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+					throw new Exceptions.TimeoutException("NVDA Remote TLS negotiation timed out. Check that the local Remote port belongs to NVDA.");
+				}
+				cancellation.Cancel();
+				await handshake;
 			}
 		}
 
@@ -790,7 +875,7 @@ namespace NvdaTestingDriver
 		/// Parses the message received from NVDA remote server.
 		/// </summary>
 		/// <param name="message">The message.</param>
-		private void ParseMessage(string message)
+		internal void ParseMessage(string message)
 		{
 			if (string.IsNullOrWhiteSpace(message))
 			{
@@ -798,7 +883,7 @@ namespace NvdaTestingDriver
 			}
 
 			var jsonMessage = JObject.Parse(message);
-			var type = jsonMessage["type"].Value<string>();
+			var type = (string)jsonMessage["type"];
 			if (string.IsNullOrWhiteSpace(type))
 			{
 				return;
@@ -883,7 +968,7 @@ namespace NvdaTestingDriver
 		/// or
 		/// There are no keys defined in the  key combination set
 		/// </exception>
-		private List<KeyCombination> GetKeyCombinationSet(INvdaCommand command)
+		internal List<KeyCombination> GetKeyCombinationSet(INvdaCommand command)
 		{
 			if (command == null)
 			{
@@ -893,7 +978,7 @@ namespace NvdaTestingDriver
 			var combinationSet = _nvdaDriverOptions.KeyboardSettings.KeyboardLayout == KeyboardLayout.Desktop ? command.DesktopCombinationSet : command.LaptopCombinationSet;
 			var keyboardLayoutStr = _nvdaDriverOptions.KeyboardSettings.KeyboardLayout.ToString();
 
-			if (combinationSet == null || command.DesktopCombinationSet.Count == 0)
+			if (combinationSet == null || combinationSet.Count == 0)
 			{
 				throw new InvalidCommandException($"The command has not {keyboardLayoutStr} combination set.");
 			}
