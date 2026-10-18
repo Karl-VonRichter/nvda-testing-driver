@@ -241,7 +241,7 @@ namespace NvdaTestingDriver
 		/// <param name="timeout">The maximum time the method will wait for an NVDA message before raising an exception. By default, timeout is 3 seconds.</param>
 		/// <param name="timeToWaitNewMessages">
 		/// There are occasions when NVDA transmits messages separately, in different packets.
-		/// This parameter sets the maximum time that NVDA will concatenate new messages received within the return of this method, starting from the arrival of the first message.</param>
+		/// This parameter sets the maximum time that NVDA will concatenate new messages received within the return of this method, starting from the arrival of the most recent message (a period of silence).</param>
 		/// <param name="actionToExecute">The action to execute, which should cause NVDA to return
 		/// some message, which will be returned by this method.</param>
 		/// <returns>The task that once completed, will contain The NVDA spoken text immediately following the execution of the action.</returns>
@@ -261,41 +261,45 @@ namespace NvdaTestingDriver
 			CheckConnectivity();
 
 			StringBuilder spokenMessage = new StringBuilder();
-			DateTime? firstMessageTime = null;
+			var sync = new object();
+			var timer = Stopwatch.StartNew();
+			TimeSpan? lastMessageTime = null;
 
 			void LocalSpeakReceived(object sender, string message)
 			{
-				if (!string.IsNullOrWhiteSpace(message))
+				if (string.IsNullOrWhiteSpace(message)) return;
+				lock (sync)
 				{
-					if (spokenMessage.Length == 0)
-					{
-						firstMessageTime = DateTime.Now;
-					}
-
-					spokenMessage.Append((spokenMessage.Length > 0 ? Environment.NewLine : string.Empty) + message);
+					lastMessageTime = timer.Elapsed;
+					if (spokenMessage.Length > 0) spokenMessage.AppendLine();
+					spokenMessage.Append(message);
 				}
 			}
 
 			this.OnSpeakReceived += LocalSpeakReceived;
-			if (actionToExecute != null)
+			try
 			{
-				await actionToExecute.Invoke();
+				if (actionToExecute != null) await actionToExecute();
+				while (timer.Elapsed < timeout.Value)
+				{
+					lock (sync)
+					{
+						if (lastMessageTime.HasValue && timer.Elapsed - lastMessageTime.Value >= timeToWaitNewMessages.Value)
+							return spokenMessage.ToString();
+					}
+					await Task.Delay(50);
+				}
+				lock (sync)
+				{
+					if (spokenMessage.Length == 0)
+						throw new Exceptions.TimeoutException("Timeout exceeded when trying to get the next message transmitted by NVDA.");
+					return spokenMessage.ToString();
+				}
 			}
-
-			var operationStart = DateTime.Now;
-			while ((spokenMessage.Length == 0 || (firstMessageTime.HasValue && DateTime.Now - firstMessageTime.Value < timeToWaitNewMessages))
-				&& DateTime.Now - operationStart < timeout)
+			finally
 			{
-				await Task.Delay(100);
+				this.OnSpeakReceived -= LocalSpeakReceived;
 			}
-
-			this.OnSpeakReceived -= LocalSpeakReceived;
-			if (spokenMessage.Length == 0 && DateTime.Now - operationStart > timeout)
-			{
-				throw new Exceptions.TimeoutException("Timeout exceeded when trying to get the next message transmitted by NVDA.");
-			}
-
-			return spokenMessage.ToString();
 		}
 
 		/// <summary>
@@ -424,7 +428,7 @@ namespace NvdaTestingDriver
 		/// <summary>
 		/// Cancels the current speak asynchronously.
 		/// </summary>
-		/// <param name="timeout">The timeout for this operation. By default, timeout is 3 seconds.</param>
+		/// <param name="timeout">The timeout for this operation. By default, timeout is 500 milliseconds.</param>
 		/// <returns>
 		/// The task associated to this operation
 		/// </returns>
