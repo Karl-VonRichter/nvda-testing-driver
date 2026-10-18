@@ -41,15 +41,24 @@ namespace NvdaTestingDriver
 	/// <seealso cref="System.IDisposable" />
 	public class NvdaDriver : IDisposable
 	{
-		private const string SetConnectionMsg = "{\"connection_type\": \"master\", \"type\": \"join\", \"channel\": \"NvdaRemote\"}\n";
+		internal const string LocalHost = "127.0.0.1";
+
+		internal const int NvdaRemotePort = 6837;
+
+		internal const string NvdaRemoteKey = "NvdaRemote";
+
+		private const string SetConnectionMsg = "{\"connection_type\": \"master\", \"type\": \"join\", \"channel\": \"" + NvdaRemoteKey + "\"}\n";
 
 		private const string SetCommunicationProtocolMsg = "{\"version\": 2, \"type\": \"protocol_version\"}";
 
 		private const string NvdaRegistryKey = @"Software\KastweySoftware\NvdaTestingDriver";
 
-		private const string LocalHost = "127.0.0.1";
+		/// <summary>
+		/// First NVDA version with Remote Access built in (it replaced the NVDA Remote add-on used by the bundled copy).
+		/// </summary>
+		private const int MinimumInstalledNvdaYear = 2025;
 
-		private const int NvdaRemotePort = 6837;
+		private static readonly string[] NvdaProcessNames = { "nvda", "nvda_uiAccess", "nvda_noUIAccess" };
 
 		private readonly Regex _multiSpaceRegex = new Regex(@"\s+");
 
@@ -123,15 +132,47 @@ namespace NvdaTestingDriver
 				throw new AlreadyConnectedException();
 			}
 
-			var nvdaExecutableFilePath = GetNvdaExecutableFilePath();
-			var nvdaDirectory = Path.GetDirectoryName(nvdaExecutableFilePath);
 			var nvdaDriverOptionsWriter = new NvdaDriverOptionsWriter(_nvdaDriverOptions);
-			nvdaDriverOptionsWriter.WriteOptionsToIniFile(Path.Combine(nvdaDirectory, "userConfig", "nvda.ini"));
-			KillPreviousNVDA();
+			ProcessStartInfo processParam;
+			var installedNvdaExecutableFilePath = GetInstalledNvdaExecutableFilePath();
+			if (installedNvdaExecutableFilePath != null)
+			{
+				// Run the installed NVDA against a throwaway config directory, so the user's own settings are left untouched.
+				var configDirectory = Path.Combine(Path.GetTempPath(), "NvdaTestingDriver", "userConfig");
+				KillPreviousNVDA();
+				if (Directory.Exists(configDirectory))
+				{
+					Directory.Delete(configDirectory, true);
+				}
 
-			ProcessStartInfo processParam = new ProcessStartInfo { FileName = nvdaExecutableFilePath };
+				Directory.CreateDirectory(configDirectory);
+				nvdaDriverOptionsWriter.WriteOptionsToIniFile(Path.Combine(configDirectory, "nvda.ini"));
+				processParam = new ProcessStartInfo
+				{
+					FileName = installedNvdaExecutableFilePath,
+					Arguments = $"--config-path \"{configDirectory}\"",
+					// nvda.exe has a uiAccess manifest, which CreateProcess rejects with ERROR_ELEVATION_REQUIRED.
+					UseShellExecute = true,
+				};
+			}
+			else
+			{
+				var nvdaExecutableFilePath = GetNvdaExecutableFilePath();
+				var nvdaDirectory = Path.GetDirectoryName(nvdaExecutableFilePath);
+				nvdaDriverOptionsWriter.WriteOptionsToIniFile(Path.Combine(nvdaDirectory, "userConfig", "nvda.ini"));
+				KillPreviousNVDA();
+				processParam = new ProcessStartInfo { FileName = nvdaExecutableFilePath };
+			}
+
 			_nvdaProcess = Process.Start(processParam);
-			_nvdaProcess.WaitForInputIdle();
+			try
+			{
+				_nvdaProcess.WaitForInputIdle();
+			}
+			catch (InvalidOperationException)
+			{
+				// The installed nvda.exe may hand over to another process and exit before showing a message loop.
+			}
 			_tcpClient = new TcpClient();
 			await ConnectSocketAsync(LocalHost, NvdaRemotePort);
 			_networkStream = _tcpClient.GetStream();
@@ -173,6 +214,8 @@ namespace NvdaTestingDriver
 			{
 				// eror when killing nvda process.
 			}
+
+			KillPreviousNVDA();
 		}
 
 		/// <summary>
@@ -429,7 +472,7 @@ namespace NvdaTestingDriver
 		/// </summary>
 		private static void KillPreviousNVDA()
 		{
-			var nvdaProcesses = Process.GetProcessesByName("nvda");
+			var nvdaProcesses = NvdaProcessNames.SelectMany(Process.GetProcessesByName).ToList();
 			if (nvdaProcesses.Any())
 			{
 				foreach (var nvdaProcess in nvdaProcesses)
@@ -463,6 +506,47 @@ namespace NvdaTestingDriver
 		/// it will extract the nvda.zip file into a temporary folder..
 		/// </summary>
 		/// <returns>The NVDA executable file path</returns>
+		/// <summary>
+		/// Gets the path of a usable NVDA 2025.1+ executable: the explicit one in the options, or the one installed on this machine.
+		/// </summary>
+		/// <returns>The executable path, or null if the bundled portable NVDA must be used instead.</returns>
+		private string GetInstalledNvdaExecutableFilePath()
+		{
+			if (!string.IsNullOrWhiteSpace(_nvdaDriverOptions.NvdaExecutablePath))
+			{
+				if (!File.Exists(_nvdaDriverOptions.NvdaExecutablePath))
+				{
+					throw new FileNotFoundException("The configured NVDA executable was not found.", _nvdaDriverOptions.NvdaExecutablePath);
+				}
+
+				return _nvdaDriverOptions.NvdaExecutablePath;
+			}
+
+			if (!_nvdaDriverOptions.UseInstalledNvda)
+			{
+				return null;
+			}
+
+			var candidates = new List<string>();
+			using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\nvda.exe"))
+			{
+				candidates.Add(key?.GetValue(null) as string);
+			}
+
+			using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\NVDA"))
+			{
+				var directory = key?.GetValue("UninstallDirectory") as string;
+				candidates.Add(string.IsNullOrWhiteSpace(directory) ? null : Path.Combine(directory, "nvda.exe"));
+			}
+
+			candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "NVDA", "nvda.exe"));
+			candidates.Add(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "NVDA", "nvda.exe"));
+
+			return candidates
+				.Where(c => !string.IsNullOrWhiteSpace(c) && File.Exists(c))
+				.FirstOrDefault(c => FileVersionInfo.GetVersionInfo(c).FileMajorPart >= MinimumInstalledNvdaYear);
+		}
+
 		private string GetNvdaExecutableFilePath()
 		{
 			using (var registryKey = Registry.CurrentUser.OpenSubKey(NvdaRegistryKey))
@@ -626,32 +710,44 @@ namespace NvdaTestingDriver
 		{
 			_taskReceivingMessages = Task.Run(async () =>
 			{
+				byte[] buffer = new byte[4096];
+				StringBuilder messageData = new StringBuilder();
+
+				// Keep one decoder for the whole stream, in case a character spans two reads.
+				Decoder decoder = Encoding.UTF8.GetDecoder();
 				while (!_cancellationTokenSource.Token.IsCancellationRequested)
 				{
-					byte[] buffer = new byte[1024];
-					StringBuilder messageData = new StringBuilder();
-					int bytes = -1;
-					do
+					int bytes;
+					try
 					{
-						if (_cancellationTokenSource.Token.IsCancellationRequested)
-						{
-							return;
-						}
-
-						// Read the client's test message.
 						bytes = await _sslStream.ReadAsync(buffer, 0, buffer.Length, _cancellationTokenSource.Token);
-
-						// Use Decoder class to convert from bytes to UTF8
-						// in case a character spans two buffers.
-						Decoder decoder = Encoding.UTF8.GetDecoder();
-						char[] chars = new char[decoder.GetCharCount(buffer, 0, bytes)];
-						decoder.GetChars(buffer, 0, bytes, chars, 0);
-						messageData.Append(chars);
 					}
-					while (bytes == buffer.Length);
-					string message = messageData.ToString();
-					ParseMessage(message);
-					OnDataReceibed?.Invoke(this, message);
+					catch (Exception) when (_cancellationTokenSource.Token.IsCancellationRequested)
+					{
+						return;
+					}
+
+					if (bytes == 0)
+					{
+						return;
+					}
+
+					char[] chars = new char[decoder.GetCharCount(buffer, 0, bytes)];
+					decoder.GetChars(buffer, 0, bytes, chars, 0);
+					messageData.Append(chars);
+
+					// Messages are newline-delimited JSON; one read can hold several messages, or only part of one.
+					string pending = messageData.ToString();
+					int newLineIndex;
+					while ((newLineIndex = pending.IndexOf('\n')) >= 0)
+					{
+						string message = pending.Substring(0, newLineIndex);
+						pending = pending.Substring(newLineIndex + 1);
+						ParseMessage(message);
+						OnDataReceibed?.Invoke(this, message);
+					}
+
+					messageData.Clear().Append(pending);
 				}
 			});
 		}

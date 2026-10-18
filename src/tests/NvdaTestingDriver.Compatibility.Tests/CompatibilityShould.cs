@@ -15,6 +15,7 @@ namespace NvdaTestingDriver.Compatibility.Tests
 			NvdaAssert.TextContains("Example heading  level 1", "heading level 1");
 			Assert.AreEqual(1, NavigatingSystemFocusCommands.ReportCurrentFocus.DesktopCombinationSet.Count);
 			Assert.IsNotNull(new WebDriverWrapper());
+			Assert.IsTrue(new NvdaDriverOptions().UseInstalledNvda);
 		}
 	}
 }
