@@ -17,6 +17,8 @@ namespace AccessibleDemo.Controllers
 
 		public HomeController(IWebHostEnvironment environment) => _environment = environment;
 
+		public IActionResult Components() => View();
+
 		public IActionResult Index()
 		{
 			return View();
