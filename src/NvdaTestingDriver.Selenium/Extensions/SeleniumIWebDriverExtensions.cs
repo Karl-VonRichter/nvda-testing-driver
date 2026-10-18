@@ -26,24 +26,21 @@ namespace NvdaTestingDriver.Selenium.Extensions
 		/// <exception cref="ArgumentNullException">element</exception>
 		public static void Focus(this IWebDriver webDriver, IWebElement element)
 		{
-			var javascriptExecutor = (IJavaScriptExecutor)webDriver;
-			if (element == null)
-			{
-				throw new ArgumentNullException(nameof(element));
-			}
-
-			string javascriptInstructions = string.Empty;
-
-			bool hasTabIndexAttribute = !string.IsNullOrWhiteSpace(element.GetAttribute("tabindex"));
-			if (!hasTabIndexAttribute)
-			{
-				javascriptInstructions = "arguments[0].setAttribute(\"tabindex\", \"-1\");\n";
-			}
-
-			javascriptInstructions += "arguments[0].focus();\n";
-			javascriptExecutor.ExecuteScript(javascriptInstructions, element);
+			if (webDriver == null) throw new ArgumentNullException(nameof(webDriver));
+			if (element == null) throw new ArgumentNullException(nameof(element));
+			var javascriptExecutor = webDriver as IJavaScriptExecutor ?? throw new NotSupportedException("The WebDriver must support JavaScript execution.");
+			bool focused = (bool)javascriptExecutor.ExecuteScript(@"
+arguments[0].focus();
+if (document.activeElement !== arguments[0] && !arguments[0].hasAttribute('tabindex')) {
+    arguments[0].setAttribute('tabindex', '-1');
+    arguments[0].focus();
+}
+return document.activeElement === arguments[0];", element);
+			if (!focused) throw new InvalidOperationException("The element could not receive keyboard focus.");
 		}
 
+		/// <summary>Requests focus for the document. Use the wrapper to activate its native window first.</summary>
+		/// <param name="webDriver">The browser session.</param>
 		public static void FocusOnWindow(this IWebDriver webDriver)
 		{
 			((IJavaScriptExecutor)webDriver).ExecuteScript("window.focus();");

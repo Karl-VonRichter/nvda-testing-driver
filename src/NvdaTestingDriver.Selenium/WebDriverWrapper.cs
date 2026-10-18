@@ -9,15 +9,10 @@
 // GNU General Public License for more details.
 
 using System;
-using System.Diagnostics;
-using System.Linq;
 using System.Text;
+using System.Runtime.InteropServices;
 using System.Threading;
 using OpenQA.Selenium;
-using OpenQA.Selenium.Chrome;
-using OpenQA.Selenium.Edge;
-using OpenQA.Selenium.Firefox;
-using OpenQA.Selenium.IE;
 
 namespace NvdaTestingDriver.Selenium
 {
@@ -43,24 +38,32 @@ namespace NvdaTestingDriver.Selenium
 		/// <returns>IWebDriver instance</returns>
 		public IWebDriver UpWebDriver(Func<IWebDriver> webDriverFunc)
 		{
-			WebDriver = webDriverFunc();
-			GetProcesName(WebDriver);
-
-			// Find the browser's top-level window by giving the page a unique title. Matching by process
-			// would also match the user's own browser windows.
+			if (webDriverFunc == null) throw new ArgumentNullException(nameof(webDriverFunc));
+			if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+				throw new NotSupportedException("Native browser foreground control requires Windows.");
+			WebDriver = webDriverFunc() ?? throw new InvalidOperationException("The browser factory returned null.");
+			_browserWindowHandle = IntPtr.Zero;
+			var javascript = WebDriver as IJavaScriptExecutor ?? throw new NotSupportedException("The browser must support JavaScript execution.");
+			string originalTitle = WebDriver.Title;
 			string marker = "nvda-testing-driver-" + Guid.NewGuid().ToString("N");
-			((IJavaScriptExecutor)WebDriver).ExecuteScript("document.title = arguments[0];", marker);
-			var deadline = DateTime.Now.AddSeconds(10);
-			while (_browserWindowHandle == IntPtr.Zero && DateTime.Now < deadline)
+			try
 			{
-				_browserWindowHandle = FindTopLevelWindow(marker);
-				if (_browserWindowHandle == IntPtr.Zero)
+				javascript.ExecuteScript("document.title = arguments[0];", marker);
+				var deadline = DateTime.UtcNow.AddSeconds(10);
+				while (_browserWindowHandle == IntPtr.Zero && DateTime.UtcNow < deadline)
 				{
-					Thread.Sleep(200);
+					_browserWindowHandle = FindTopLevelWindow(marker);
+					if (_browserWindowHandle == IntPtr.Zero) Thread.Sleep(200);
 				}
 			}
-
+			finally
+			{
+				javascript.ExecuteScript("document.title = arguments[0];", originalTitle);
+			}
+			if (_browserWindowHandle == IntPtr.Zero)
+				throw new InvalidOperationException("Could not find a visible local browser window for this WebDriver session.");
 			SetBrowserWindowForeground();
+			EnsureBrowserWindowForeground();
 			return WebDriver;
 		}
 
@@ -70,7 +73,7 @@ namespace NvdaTestingDriver.Selenium
 		/// <returns><c>true</c> if the browser window is in the foreground.</returns>
 		public bool IsBrowserWindowForeground()
 		{
-			return _browserWindowHandle != IntPtr.Zero && NativeMethods.GetForegroundWindow() == _browserWindowHandle;
+			return _browserWindowHandle != IntPtr.Zero && NativeMethods.IsWindow(_browserWindowHandle) && NativeMethods.GetForegroundWindow() == _browserWindowHandle;
 		}
 
 		/// <summary>
@@ -148,37 +151,5 @@ namespace NvdaTestingDriver.Selenium
 			}
 		}
 
-		/// <summary>
-		/// Gets the name of the browser process, depending on the IWebDriver object type passed as parameter.
-		/// </summary>
-		/// <param name="webDriver">The web driver.</param>
-		/// <returns>The browser process name</returns>
-		/// <exception cref="NotSupportedException">This webdrivver is not supported in this wrapper: {webDriver.GetType().Name}</exception>
-		private string GetProcesName(IWebDriver webDriver)
-		{
-			string processName = null;
-			if (webDriver is ChromeDriver)
-			{
-				processName = "chrome";
-			}
-			else if (webDriver is FirefoxDriver)
-			{
-				processName = "firefox";
-			}
-			else if (webDriver is InternetExplorerDriver)
-			{
-				processName = "iexplore";
-			}
-			else if (webDriver is EdgeDriver)
-			{
-				processName = "msedge";
-			}
-			else
-			{
-				throw new NotSupportedException($"This webdrivver is not supported in this wrapper: {webDriver.GetType().Name}.");
-			}
-
-			return processName;
-		}
 	}
 }
