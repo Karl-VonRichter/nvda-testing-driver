@@ -34,7 +34,7 @@ Changes since 0.2.0-beta, the last release on NuGet.
 - The Remote TLS handshake times out after 10 seconds. A failed connection cleans up before rethrowing.
 - Disconnecting only stops NVDA processes the driver started.
 - When NVDA doesn't confirm a speech cancel, commands carry on instead of failing.
-- The demo app and samples target .NET 8, and the demo uses Bootstrap 5.
+- The demo app, samples, and tests target .NET 10, and the demo uses Bootstrap 5.
 - CI runs on hosted Windows runners, with an optional manual job for screen-reader tests on a self-hosted desktop.
 
 ### Fixed

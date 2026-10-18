@@ -51,7 +51,7 @@ namespace AccessibleDemo.Core.Tests
 			BaseUrl = $"http://127.0.0.1:{port}";
 			string project = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "AccessibleDemo"));
 			string configuration = new DirectoryInfo(AppContext.BaseDirectory).Parent.Name;
-			string assembly = Path.Combine(project, "bin", configuration, "net8.0", "AccessibleDemo.dll");
+			string assembly = Path.Combine(project, "bin", configuration, "net10.0", "AccessibleDemo.dll");
 			if (!File.Exists(assembly)) throw new FileNotFoundException("Build the local demo before running its tests.", assembly);
 			var attributes = Assembly.LoadFrom(assembly).GetCustomAttributes<AssemblyMetadataAttribute>();
 			Session.Metadata.Url = BaseUrl;

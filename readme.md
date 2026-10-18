@@ -12,7 +12,7 @@ It works for websites (with Selenium) and for desktop applications.
 | --- | --- |
 | NVDA | 2025.1 or later, installed or at an explicit path (recommended). The bundled portable NVDA 2018.4.1 is used as a fallback. |
 | Browsers | Chrome, Edge, and Chromium through Selenium. Firefox is untested: the window handling isn't browser-specific, but the samples don't start it. Internet Explorer is not supported. |
-| Your test projects | Anything that can use .NET Standard 2.0, such as .NET 8 and later, or .NET Framework 4.7.2 and later. .NET 8 and .NET Framework 4.8 are tested. |
+| Your test projects | Anything that can use .NET Standard 2.0, such as .NET 8 and later, or .NET Framework 4.7.2 and later. .NET 10 and .NET Framework 4.8 are tested. |
 | Dependencies | Selenium.WebDriver 4.x and MSTest 3.x (for `NvdaTestingDriver.MSTest`). |
 | Operating system | Windows, on an unlocked interactive desktop. Headless browsers and non-interactive build agents can't be used. |
 | Last verified with | NVDA 2026.2 and Chrome 154 on Windows 11. |
@@ -161,7 +161,7 @@ Selenium Manager finds the browser driver. For `chromium` without a binary path,
 
 ## Building and testing this repository
 
-You need the .NET 8 SDK or later on Windows.
+You need the .NET 10 SDK or later on Windows.
 
 ```powershell
 dotnet build src/NvdaTestingDriver.sln --configuration Release

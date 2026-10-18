@@ -12,7 +12,7 @@ Sirve para sitios web (con Selenium) y para aplicaciones de escritorio.
 | --- | --- |
 | NVDA | 2025.1 o posterior, instalado o en una ruta indicada (recomendado). Si no hay ninguno, se usa la copia portable incluida de NVDA 2018.4.1. |
 | Navegadores | Chrome, Edge y Chromium mediante Selenium. Firefox no se ha probado: la gestión de ventanas no depende del navegador, pero los ejemplos no lo inician. Internet Explorer no es compatible. |
-| Tus proyectos de prueba | Cualquiera que pueda usar .NET Standard 2.0, como .NET 8 o posterior y .NET Framework 4.7.2 o posterior. Se prueban .NET 8 y .NET Framework 4.8. |
+| Tus proyectos de prueba | Cualquiera que pueda usar .NET Standard 2.0, como .NET 8 o posterior y .NET Framework 4.7.2 o posterior. Se prueban .NET 10 y .NET Framework 4.8. |
 | Dependencias | Selenium.WebDriver 4.x y MSTest 3.x (para `NvdaTestingDriver.MSTest`). |
 | Sistema operativo | Windows, con un escritorio interactivo desbloqueado. No se pueden usar navegadores sin interfaz (headless) ni agentes de compilación no interactivos. |
 | Última verificación | NVDA 2026.2 y Chrome 154 en Windows 11. |
@@ -163,7 +163,7 @@ Selenium Manager localiza el controlador del navegador. Con `chromium` y sin rut
 
 ## Compilar y probar este repositorio
 
-Necesitas Windows y el SDK de .NET 8 o posterior.
+Necesitas Windows y el SDK de .NET 10 o posterior.
 
 ```powershell
 dotnet build src/NvdaTestingDriver.sln --configuration Release
