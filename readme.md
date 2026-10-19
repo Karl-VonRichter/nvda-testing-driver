@@ -15,7 +15,7 @@ It works for websites (with Selenium) and for desktop applications.
 | Your test projects | Anything that can use .NET Standard 2.0, such as .NET 8 and later, or .NET Framework 4.7.2 and later. .NET 10 and .NET Framework 4.8 are tested. |
 | Dependencies | Selenium.WebDriver 4.x and MSTest 3.x (for `NvdaTestingDriver.MSTest`). |
 | Operating system | Windows, on an unlocked interactive desktop. Headless browsers and non-interactive build agents can't be used. |
-| Last verified with | NVDA 2026.2 and Chrome 154 on Windows 11. |
+| Last verified with | NVDA 2026.2 and Chrome 155 on Windows 11, with .NET 10. |
 
 Upgrading from 0.2.0-beta? See [CHANGELOG.md](CHANGELOG.md) for breaking changes.
 
@@ -105,7 +105,7 @@ When a test runs, the driver closes any running NVDA and starts its own. It does
 By default the driver uses an installed NVDA 2025.1 or later and connects through NVDA's built-in Remote Access. To control this:
 
 - `NvdaExecutablePath` picks a specific NVDA 2025.1+ executable, installed or portable.
-- `UseInstalledNvda = false` uses the bundled NVDA 2018.4.1 and its Remote add-on. It's kept for compatibility, but it reads modern web pages poorly, so use a current NVDA for website testing.
+- `UseInstalledNvda = false` uses the bundled NVDA 2018.4.1 and its Remote add-on. It's kept for compatibility, but it reads modern web pages poorly: with Chrome 155 its browse mode quick navigation keys (such as H and T) don't work, and only 3 of the 7 local samples pass. Use a current NVDA for website testing.
 
 ```csharp
 var nvda = new NvdaDriver(options =>
